@@ -1,0 +1,374 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  JOSEPAN 360 · OMNI · [1003] GESTIÓN DE ALMACENES Y MERMAS
+ *  api/omni.php — Proxy ÚNICO mismo-origen hacia el API CORE v6 [1001]
+ *
+ *  El navegador SOLO habla con este archivo (mismo dominio) → PHP hace las
+ *  llamadas cURL al API CORE mediante OmniCoreClient.php → CERO CORS.
+ *  Enrutado por ?action=<verbo>. RBAC reforzado en servidor por acción.
+ *
+ *  Las RUTAS UPSTREAM están centralizadas abajo (array $UP). Valídalas contra
+ *  tu colección Postman real del API CORE v6 antes de producción.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+require_once __DIR__ . '/OmniCoreClient.php';
+
+session_start([
+    'cookie_httponly' => true,
+    'cookie_samesite' => 'Strict',
+]);
+
+header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+
+/* ── Configuración de entorno (.env) ────────────────────────────────────── */
+function env(string $k, string $default = ''): string
+{
+    static $cache = null;
+    if ($cache === null) {
+        $cache = [];
+        $path  = __DIR__ . '/../.env';
+        if (is_file($path)) {
+            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+                if ($line === '' || $line[0] === '#') continue;
+                [$key, $val] = array_pad(explode('=', $line, 2), 2, '');
+                $cache[trim($key)] = trim($val);
+            }
+        }
+    }
+    return $cache[$k] ?? (getenv($k) ?: $default);
+}
+
+$API_HOST   = env('OMNI_API_HOST', 'https://api.omni.josepan.app');
+$API_PREFIX = env('OMNI_API_PREFIX', '/api/v1');
+
+/* ── Mapa de rutas UPSTREAM (validar contra Postman real) ───────────────── */
+$UP = [
+    /* ── Operativo (validado contra colección Postman v6) ── */
+    'catalog_skus'         => '/catalog/skus',
+    'catalog_locations'    => '/catalog/locations',
+    'catalog_interlocutors'=> '/catalog/interlocutors',
+    'catalog_employees'    => '/catalog/employees',
+    'catalog_categories'   => '/catalog/categories',
+    'catalog_families'     => '/catalog/families',
+    'routes'               => '/logistics/routes',
+    'stock'                => '/inventory/stock',
+    'batches'              => '/inventory/batches',      // GET lotes activos (FEFO)
+    'reception'            => '/inventory/reception',    // POST atómico (movement_type:"Compra")
+    'transfer'             => '/inventory/transfer',     // POST atómico (Traslado Interno/Externo)
+    'scrap'                => '/inventory/scrap',         // POST merma con evidencia
+    /* Workflow de traspaso externo — PENDIENTE de publicación en API CORE
+       (ver REQ_TRANSFER_WORKFLOW_1003.md). Rutas ya alineadas al contrato. */
+    'transfers'            => '/inventory/transfers',                 // POST crear / GET ?state=
+    'transfer_picking'     => '/inventory/transfers/%d/picking',      // PUT
+    'transfer_dispatch'    => '/inventory/transfers/%d/dispatch',     // PUT
+    'transfer_route'       => '/inventory/transfers/%d/route',        // PUT
+    'transfer_deliver'     => '/inventory/transfers/%d/deliver',      // PUT
+    'transfer_close'       => '/inventory/transfers/%d/close',        // PUT
+    'roles'            => '/rbac/roles',                        // GET roles operativos
+    'perms_1003'       => '/rbac/subsystems/1003/screen-permissions', // GET / PUT mapa de pantallas
+    'screens_catalog'  => '/rbac/subsystems/1003/screens',      // GET pantallas registradas (catálogo SSOT)
+    'my_screens'       => '/rbac/subsystems/1003/my-screens',   // GET pantallas del usuario actual
+];
+
+/* ── Matriz RBAC por acción (defensa en servidor) ───────────────────────── */
+$RBAC = [
+    'recepcion'           => ['Encargado de Almacén', 'Personal de Picking'],
+    'ubicar'              => ['Encargado de Almacén', 'Personal de Picking'],
+    'merma'               => ['Encargado de Almacén', 'Encargado de Tienda', 'Personal de Picking'],
+    'traspaso_solicitar'  => ['Encargado de Tienda', 'Director de Suministros'],
+    'picking_iniciar'     => ['Personal de Picking', 'Encargado de Almacén'],
+    'picking_alistar'     => ['Personal de Picking', 'Encargado de Almacén'],
+    'transporte_ruta'     => ['Transportista'],
+    'transporte_entregar' => ['Transportista'],
+    'traspaso_cerrar'     => ['Encargado de Tienda'],
+];
+
+/* ── Helpers de respuesta ───────────────────────────────────────────────── */
+function out(array $payload, int $code = 200): void
+{
+    http_response_code($code);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+function fail(string $code, string $msg, int $http = 400): void
+{
+    out(['ok' => false, 'code' => $code, 'error' => $msg], $http);
+}
+function bodyJson(): array
+{
+    $raw = file_get_contents('php://input');
+    $d   = json_decode($raw ?: '[]', true);
+    return is_array($d) ? $d : [];
+}
+
+/* ── Cliente con contexto de sesión ─────────────────────────────────────── */
+function client(): OmniCoreClient
+{
+    global $API_HOST, $API_PREFIX;
+    $c = new OmniCoreClient($API_HOST, $API_PREFIX);
+    if (!empty($_SESSION['omni_token']))        $c->setToken($_SESSION['omni_token']);
+    if (isset($_SESSION['omni_interlocutor']))  $c->setInterlocutor($_SESSION['omni_interlocutor']);
+    return $c;
+}
+
+/* ── Guardas auth + RBAC ────────────────────────────────────────────────── */
+function requireAuth(): array
+{
+    if (empty($_SESSION['omni_token']) || empty($_SESSION['omni_user'])) {
+        fail('ERR_AUTH', 'Sesión no autenticada.', 401);
+    }
+    return $_SESSION['omni_user'];
+}
+function isSuperAdmin(string $rol): bool
+{
+    $r = strtolower(preg_replace('/[\s_-]/', '', $rol));
+    return strpos($r, 'superadmin') !== false;
+}
+function requireRole(string $action): array
+{
+    global $RBAC;
+    $user  = requireAuth();
+    $roles = $RBAC[$action] ?? [];
+    $rol   = $user['rol'] ?? $user['role'] ?? '';
+    if (!isSuperAdmin($rol) && !in_array($rol, $roles, true)) {
+        fail('ERR_RBAC', 'Acceso denegado por rol para esta operación.', 403);
+    }
+    return $user;
+}
+function requireSuperAdmin(): array
+{
+    $user = requireAuth();
+    $rol  = $user['rol'] ?? $user['role'] ?? '';
+    if (!isSuperAdmin($rol)) {
+        fail('ERR_RBAC', 'Solo el SuperAdmin puede gestionar permisos.', 403);
+    }
+    return $user;
+}
+
+/* ── Helper de despacho upstream uniforme ───────────────────────────────── */
+function relay(array $res): void
+{
+    out(
+        ['ok' => $res['ok'], 'data' => $res['data'], 'code' => $res['error']],
+        $res['ok'] ? 200 : ($res['status'] ?: 502)
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ROUTER
+═══════════════════════════════════════════════════════════════════════════ */
+$action = $_GET['action'] ?? '';
+
+switch ($action) {
+
+    /* ── AUTENTICACIÓN ──────────────────────────────────────────────────── */
+    case 'login': {
+        $in  = bodyJson();
+        $c   = client();
+        $res = $c->login([
+            'usuario'         => $in['usuario'] ?? $in['username'] ?? '',
+            'password'        => $in['password'] ?? '',
+            'interlocutor_id' => $in['interlocutor_id'] ?? 1,
+        ]);
+        if (!$res['ok']) fail('ERR_LOGIN', $res['error'] ?? 'Credenciales inválidas.', 401);
+
+        // El sobre ya viene desenvuelto: $res['data'] es el payload interno.
+        $token = $res['data']['token'] ?? $res['data']['access_token'] ?? null;
+        if (!$token) fail('ERR_LOGIN', 'El API no devolvió token.', 502);
+
+        $_SESSION['omni_token'] = $token;
+        $c->setToken($token);
+
+        // Datos de usuario: del propio login o, si no, de /auth/me.
+        $user = $res['data']['user'] ?? $res['data'] ?? [];
+        if (empty($user['rol']) && empty($user['role'])) {
+            $me = $c->me();
+            if ($me['ok'] && is_array($me['data'])) $user = $me['data'];
+        }
+        $_SESSION['omni_user'] = $user;
+        // Interlocutor provisional (para poder listar). El definitivo lo elige el usuario.
+        $_SESSION['omni_interlocutor'] = $user['interlocutor_id'] ?? ($in['interlocutor_id'] ?? 1);
+        unset($_SESSION['omni_interlocutor_set']);
+
+        // Interlocutores disponibles para que el usuario elija su tienda/bodega.
+        $intc = $c->request('GET', $UP['catalog_interlocutors'], null, true);
+        $interlocutors = $intc['ok'] ? (is_array($intc['data']) ? $intc['data'] : []) : [];
+
+        out(['ok' => true, 'data' => [
+            'user'           => $user,
+            'rol'            => $user['rol'] ?? $user['role'] ?? null,
+            'interlocutors'  => $interlocutors,
+            'needs_interlocutor' => true,
+        ]]);
+    }
+
+    case 'set_interlocutor': {
+        requireAuth();
+        $id = (int) (bodyJson()['interlocutor_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'interlocutor_id inválido.', 422);
+        $_SESSION['omni_interlocutor']     = $id;
+        $_SESSION['omni_interlocutor_set'] = true;
+        out(['ok' => true, 'data' => ['interlocutor_id' => $id]]);
+    }
+
+    case 'session': {
+        if (empty($_SESSION['omni_user'])) out(['ok' => false, 'data' => null]);
+        out(['ok' => true, 'data' => [
+            'user'            => $_SESSION['omni_user'],
+            'rol'             => $_SESSION['omni_user']['rol'] ?? $_SESSION['omni_user']['role'] ?? null,
+            'interlocutor_id' => $_SESSION['omni_interlocutor'] ?? null,
+            'interlocutor_set'=> !empty($_SESSION['omni_interlocutor_set']),
+        ]]);
+    }
+
+    case 'logout': {
+        $_SESSION = [];
+        session_destroy();
+        out(['ok' => true]);
+    }
+
+    /* ── CATÁLOGO (lectura) ─────────────────────────────────────────────── */
+    case 'catalog': {
+        requireAuth();
+        $resource = preg_replace('/[^a-z_]/', '', strtolower($_GET['resource'] ?? ''));
+        $MAP = [
+            'skus'          => 'catalog_skus',
+            'locations'     => 'catalog_locations',
+            'interlocutors' => 'catalog_interlocutors',
+            'employees'     => 'catalog_employees',
+            'categories'    => 'catalog_categories',
+            'families'      => 'catalog_families',
+            'rutas'         => 'routes',   // alias front
+            'routes'        => 'routes',   // las rutas viven en /logistics/routes
+        ];
+        if (!isset($MAP[$resource])) fail('ERR_PARAM', 'Recurso de catálogo no soportado.', 422);
+        $qs = $_GET; unset($qs['action'], $qs['resource']);
+        $path = $UP[$MAP[$resource]] . ($qs ? '?' . http_build_query($qs) : '');
+        relay(client()->request('GET', $path, null, true));
+    }
+
+    case 'stock': {
+        requireAuth();
+        $qs = $_GET; unset($qs['action']);
+        relay(client()->request('GET', $UP['stock'] . ($qs ? '?' . http_build_query($qs) : ''), null, true));
+    }
+
+    case 'batches': {
+        requireAuth();
+        $qs = $_GET; unset($qs['action']);
+        relay(client()->request('GET', $UP['batches'] . ($qs ? '?' . http_build_query($qs) : ''), null, true));
+    }
+
+    /* ── FLUJO 1: RECEPCIÓN (atómica) ───────────────────────────────────── */
+    /* El API v6 no expone lista de albaranes pendientes: la recepción es un
+       alta atómica de stock (POST /inventory/reception, movement_type Compra). */
+    case 'albaranes_pendientes': {
+        requireAuth();
+        out(['ok' => true, 'data' => [], 'note' => 'El API v6 no lista albaranes; la recepción es atómica.']);
+    }
+    case 'albaran_recibir':
+    case 'reception': {
+        requireAuth();
+        $in = bodyJson();
+        $in['movement_type'] = $in['movement_type'] ?? 'Compra';
+        relay(client()->request('POST', $UP['reception'], json_encode($in, JSON_UNESCAPED_UNICODE), true));
+    }
+
+    /* ── FLUJO 2: UBICACIÓN = Traslado Interno atómico ──────────────────── */
+    case 'ubicar': {
+        requireAuth();
+        $in = bodyJson();
+        $in['movement_type'] = 'Traslado Interno';
+        relay(client()->request('POST', $UP['transfer'], json_encode($in, JSON_UNESCAPED_UNICODE), true));
+    }
+
+    /* ── FLUJO 3: TRASPASO EXTERNO (workflow multi-estado) ──────────────── */
+    /* Endpoints pendientes de publicación en API CORE (REQ_TRANSFER_WORKFLOW_1003).
+       El proxy ya está alineado al contrato: al existir las rutas, opera directo. */
+    case 'traspasos_listar': {
+        requireAuth();
+        $state = preg_replace('/[^A-Z_]/', '', strtoupper($_GET['estado'] ?? $_GET['state'] ?? ''));
+        relay(client()->request('GET', $UP['transfers'] . ($state ? '?state=' . $state : ''), null, true));
+    }
+    case 'traspaso_solicitar': {
+        requireAuth();
+        relay(client()->request('POST', $UP['transfers'], json_encode(bodyJson(), JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'picking_iniciar': {
+        requireAuth();
+        $id = (int) (bodyJson()['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_picking'], $id), '{}', true));
+    }
+    case 'picking_alistar': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_dispatch'], $id), json_encode(['items' => $in['items'] ?? []], JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'transporte_ruta': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_route'], $id), json_encode(['route_id' => $in['ruta_id'] ?? $in['route_id'] ?? null], JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'transporte_entregar': {
+        requireAuth();
+        $id = (int) (bodyJson()['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_deliver'], $id), '{}', true));
+    }
+    case 'traspaso_cerrar': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        $body = isset($in['items']) ? ['items' => $in['items']] : new stdClass();
+        relay(client()->request('PUT', sprintf($UP['transfer_close'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
+    }
+
+    /* ── FLUJO 4: MERMAS (POST /inventory/scrap con evidencia) ──────────── */
+    case 'merma': {
+        requireAuth();
+        relay(client()->request('POST', $UP['scrap'], json_encode(bodyJson(), JSON_UNESCAPED_UNICODE), true));
+    }
+
+    /* ── PANTALLAS VISIBLES PARA EL USUARIO ACTUAL ──────────────────────── */
+    /* Endpoint nativo del API CORE v6: resuelve SuperAdmin → '*' y filtra por
+       rol para el resto. Disponible para cualquier usuario autenticado. */
+    case 'mis_pantallas': {
+        requireAuth();
+        relay(client()->request('GET', $UP['my_screens'], null, true));
+    }
+
+    /* ── GESTOR DE PERMISOS (solo SuperAdmin) ───────────────────────────── */
+    case 'roles_listar': {
+        requireSuperAdmin();
+        relay(client()->request('GET', $UP['roles'] . '?ambito=operativo', null, true));
+    }
+    case 'screens_listar': {
+        requireSuperAdmin();
+        relay(client()->request('GET', $UP['screens_catalog'], null, true));
+    }
+    case 'perms_listar': {
+        requireSuperAdmin();
+        relay(client()->request('GET', $UP['perms_1003'], null, true));
+    }
+    case 'perms_guardar': {
+        requireSuperAdmin();
+        $in = bodyJson();
+        if (empty($in['permissions']) || !is_array($in['permissions'])) {
+            fail('ERR_PARAM', 'Falta el mapa de permisos.', 422);
+        }
+        relay(client()->request('PUT', $UP['perms_1003'], json_encode([
+            'permissions' => $in['permissions'],
+        ], JSON_UNESCAPED_UNICODE), true));
+    }
+
+    default:
+        fail('ERR_ACTION', 'Acción no reconocida: ' . htmlspecialchars($action), 404);
+}

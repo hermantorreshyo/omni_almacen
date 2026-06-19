@@ -1,0 +1,28 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  JOSEPAN 360 · OMNI · [1003] — Apache .htaccess
+#  VirtualHost apunta directamente a la raíz del proyecto ⇒ RewriteBase /
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Bloquear acceso directo a ficheros sensibles
+<FilesMatch "^(\.env|\.env\.example|.*\.md|setup\.sh)$">
+  Require all denied
+</FilesMatch>
+
+# El directorio /api se sirve tal cual (PHP). No reescribir sus rutas.
+RewriteEngine On
+RewriteBase /
+
+# Recursos reales (archivos/carpetas existentes) se sirven directos
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Resto → SPA
+RewriteRule ^ index.html [L]
+
+# Cabeceras de seguridad básicas
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "same-origin"
+</IfModule>

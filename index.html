@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#642a72" />
+  <title>JOSEPAN 360 · [1003] Almacén</title>
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { DEFAULT: '#642a72', 600: '#56245f', 50: '#f3edf5' },
+            ok:    { DEFAULT: '#10B981', 700: '#047857' },
+            warn:  { DEFAULT: '#F59E0B', 700: '#b45309' },
+            err:   { DEFAULT: '#EF4444', 700: '#b91c1c' },
+            ink:   { 100: '#f4f5f7', 200: '#e5e7eb', 400: '#9ca3af', 700: '#374151', 900: '#111827' },
+          },
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+
+  <!-- Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; }
+    body { font-family: 'Inter', sans-serif; background: #f4f5f7; color: #111827; }
+    input, select, textarea { font-size: 16px; } /* evita zoom iOS */
+
+    /* Botones (área táctil ≥ 46px) */
+    .btn-prim, .btn-ok, .btn-ghost { min-height: 52px; border-radius: 14px; font-weight: 600; font-size: 1rem; width: 100%; border: 0; cursor: pointer; }
+    .btn-prim  { background: #642a72; color: #fff; }
+    .btn-prim:active { background: #56245f; }
+    .btn-ok    { background: #10B981; color: #fff; }
+    .btn-ok:active { background: #047857; }
+    .btn-ghost { background: #fff; color: #374151; border: 1px solid #e5e7eb; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    .btn-ok-sm, .btn-prim-sm, .btn-del-sm { min-height: 46px; min-width: 46px; border-radius: 12px; font-weight: 600; padding: 0 14px; border: 0; cursor: pointer; }
+    .btn-ok-sm   { background: #10B981; color: #fff; }
+    .btn-prim-sm { background: #642a72; color: #fff; }
+    .btn-del-sm  { background: #fff; color: #b91c1c; border: 1px solid #fecaca; }
+
+    /* Inputs */
+    .num, .txt, .sel { width: 100%; min-height: 52px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 0 14px; background: #fff; }
+    .num { text-align: right; font-weight: 700; font-size: 1.25rem; }
+    textarea.txt { min-height: 96px; padding: 12px 14px; resize: vertical; }
+
+    /* Cards / listas */
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; }
+    .tile { display: flex; flex-direction: column; gap: 4px; text-align: left; background: #fff; border: 1px solid #e5e7eb; border-left: 5px solid #642a72; border-radius: 16px; padding: 18px 16px; min-height: 84px; cursor: pointer; }
+    .tile-t { font-weight: 700; font-size: 1.05rem; }
+    .tile-d { font-size: .85rem; color: #6b7280; }
+    .rowcard { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; min-height: 64px; text-align: left; cursor: pointer; }
+    .rowcard.col { flex-direction: column; align-items: stretch; }
+    .rowcard-top { display: flex; justify-content: space-between; align-items: center; }
+    .rowcard-ctrls { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .rowcard small, .grid-row small { display: block; color: #6b7280; font-size: .8rem; }
+    .chip { background: #f3edf5; color: #642a72; font-weight: 600; font-size: .8rem; padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
+    .tile-admin { border-left-color: #F59E0B; }
+    .perm-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 14px 16px; }
+    .perm-card-h { font-weight: 700; font-size: 1rem; }
+    .perm-card-d { font-size: .82rem; color: #6b7280; margin-bottom: 10px; }
+    .chip-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-wrap .chip { cursor: pointer; min-height: 36px; border: 1px solid #e7dcec; opacity: .65; }
+    .chip-wrap .chip-on { background: #642a72; color: #fff; border-color: #642a72; opacity: 1; }
+    .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px 16px; }
+    .kpi-v { font-size: 1.7rem; font-weight: 800; color: #642a72; line-height: 1; }
+    .kpi-l { font-size: .82rem; color: #6b7280; margin-top: 6px; }
+    .kpi-ok .kpi-v { color: #0a7d54; } .kpi-warn .kpi-v { color: #a86a06; }
+    .dash-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; font-size: .85rem; }
+    .dash-row-lbl { width: 120px; color: #374151; flex: none; }
+    .dash-bar { flex: 1; height: 12px; background: #f3edf5; border-radius: 999px; overflow: hidden; }
+    .dash-bar i { display: block; height: 100%; background: #642a72; }
+    .dash-row-n { width: 28px; text-align: right; font-weight: 700; color: #642a72; flex: none; }
+    .sku-res { display: none; border: 1px solid #e5e7eb; border-radius: 12px; margin-top: 6px; overflow: hidden; background: #fff; max-height: 260px; overflow-y: auto; }
+    .sku-res.open { display: block; }
+    .sku-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid #f1f1f4; background: #fff; font-size: .92rem; cursor: pointer; min-height: 46px; }
+    .sku-opt:hover, .sku-opt:active { background: #f3edf5; color: #642a72; }
+    .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
+    .sku-opt.sel { background: #642a72; color: #fff; }
+    .ro-field { background: #f3edf5; border: 1px solid #e7dcec; color: #642a72; font-weight: 700; border-radius: 12px; padding: 12px 14px; min-height: 46px; display: flex; align-items: center; }
+    .hub-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
+    .hub-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #4b5563; }
+    .hub-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+    .grid-row { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; margin-bottom: 10px; }
+    .grid-row-head { margin-bottom: 10px; }
+    .grid-row-body { display: flex; gap: 10px; align-items: center; }
+    .grid-row-body .num { flex: 1; }
+
+    .skel { height: 64px; border-radius: 14px; background: linear-gradient(90deg,#eee,#f6f6f6,#eee); background-size: 200% 100%; animation: sh 1.2s infinite; margin-bottom: 10px; }
+    @keyframes sh { to { background-position: -200% 0; } }
+    .empty { text-align: center; color: #6b7280; padding: 28px 12px; border: 1px dashed #e5e7eb; border-radius: 14px; }
+    .empty-err { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+
+    /* Toast */
+    #toast { position: fixed; left: 16px; right: 16px; bottom: 18px; z-index: 60; padding: 14px 16px; border-radius: 12px; color: #fff; font-weight: 600; text-align: center; }
+    #toast[data-type="ok"]   { background: #10B981; }
+    #toast[data-type="warn"] { background: #F59E0B; }
+    #toast[data-type="err"]  { background: #EF4444; }
+
+    /* Offline badge */
+    #offline-badge { background: #F59E0B; color: #fff; font-weight: 700; font-size: .8rem; padding: 6px 12px; border-radius: 999px; }
+
+    /* Numpad */
+    #numpad { position: fixed; inset: 0; z-index: 70; background: rgba(17,24,39,.55); display: flex; align-items: flex-end; }
+    .numpad-sheet { background: #fff; width: 100%; border-radius: 20px 20px 0 0; padding: 16px; }
+    #numpad-display { text-align: right; font-size: 2rem; font-weight: 800; padding: 8px 12px 16px; }
+    .numpad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .numpad-grid button { min-height: 60px; border-radius: 14px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 1.4rem; font-weight: 700; cursor: pointer; }
+    .numpad-grid .k-ok { background: #10B981; color: #fff; border: 0; grid-column: span 3; }
+
+    /* Cámara */
+    .cam-wrap { border-radius: 14px; overflow: hidden; background: #000; margin-bottom: 12px; }
+    .cam-wrap video { width: 100%; display: block; }
+
+    /* Parada de emergencia */
+    #view-emergency { position: fixed; inset: 0; z-index: 80; background: #EF4444; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px; }
+    #view-emergency h2 { font-size: 1.6rem; font-weight: 800; }
+
+    .wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
+    .sec-title { font-size: 1.25rem; font-weight: 800; margin: 4px 0 14px; }
+    .field-label { font-size: .85rem; font-weight: 600; color: #374151; margin: 12px 0 6px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────────────────── -->
+  <header id="app-header" class="hidden" style="position:sticky;top:0;z-index:40;background:#642a72;color:#fff;">
+    <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;">
+      <div>
+        <div style="font-weight:800;letter-spacing:.5px;">JOSEPAN 360 · ALMACÉN</div>
+        <div style="font-size:.78rem;opacity:.85;"><span id="hdr-user">—</span> · <span id="hdr-rol">—</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="offline-badge" class="hidden">Offline · <span id="offline-count">0</span> retenidas</span>
+        <button id="hdr-logout" class="btn-del-sm" style="background:#fff;color:#b91c1c;border:0;">Salir</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── LOGIN ────────────────────────────────────────────────── -->
+    <section id="view-login" class="view wrap" style="padding-top:48px;">
+      <div style="text-align:center;margin-bottom:28px;">
+        <div style="font-size:1.6rem;font-weight:800;color:#642a72;">JOSEPAN 360</div>
+        <div style="color:#6b7280;">[1003] Gestión de Almacenes y Mermas</div>
+      </div>
+      <div class="card" style="padding:20px;">
+        <div class="field-label">Usuario</div>
+        <input id="login-user" class="txt" autocomplete="username" placeholder="nombre.apellido" />
+        <div class="field-label">Contraseña</div>
+        <input id="login-pass" type="password" class="txt" autocomplete="current-password" placeholder="••••••••" />
+        <div style="height:16px;"></div>
+        <button id="login-btn" class="btn-prim">Entrar</button>
+      </div>
+    </section>
+
+    <!-- ── LOGIN FASE 2: SELECCIÓN DE TIENDA / INTERLOCUTOR ─────── -->
+    <section id="view-interlocutor" class="view wrap hidden" style="padding-top:48px;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="font-size:1.3rem;font-weight:800;color:#642a72;">¿Dónde trabajas hoy?</div>
+        <div style="color:#6b7280;">Selecciona tu tienda o bodega</div>
+      </div>
+      <div class="card" style="padding:20px;">
+        <div class="field-label">Tienda / Interlocutor</div>
+        <select id="intc-select" class="sel"></select>
+        <div style="height:16px;"></div>
+        <button id="intc-confirm" class="btn-prim">Continuar</button>
+      </div>
+    </section>
+
+    <!-- ── HUB ──────────────────────────────────────────────────── -->
+    <section id="view-hub" class="view wrap hidden">
+      <h1 class="sec-title">Operaciones</h1>
+      <div id="hub-legend" class="hub-legend"></div>
+      <div id="hub-tiles" style="display:flex;flex-direction:column;gap:12px;"></div>
+    </section>
+
+    <!-- ── PANEL DE TRASPASOS (dashboard + KPIs) ────────────────── -->
+    <section id="view-dashboard" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Panel de traspasos</h1>
+      <div id="dash-kpis" class="kpi-grid"></div>
+      <div id="dash-states" class="perm-card" style="margin-top:14px;"></div>
+      <div id="dash-list" style="margin-top:6px;"></div>
+    </section>
+
+    <!-- ── FLUJO 1: RECEPCIÓN (alta atómica) ────────────────────── -->
+    <section id="view-recepcion" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Recepción de mercancía</h1>
+      <div class="field-label">Nº de albarán (documento de referencia)</div>
+      <input id="rec-ref" class="txt" placeholder="ALB-2026-001" />
+      <div class="field-label">Ubicación destino</div>
+      <select id="rec-loc" class="sel"></select>
+      <div class="field-label">Producto (SKU)</div>
+      <input id="rec-sku-q" class="txt" placeholder="Buscar SKU por nombre o código…" />
+      <div id="rec-sku-res" class="sku-res"></div>
+      <div class="field-label">Referencia de lote (proveedor)</div>
+      <input id="rec-batchref" class="txt" placeholder="L-PROV-778" />
+      <div class="field-label">Fecha de caducidad</div>
+      <input id="rec-exp" class="txt" type="date" />
+      <div class="field-label">Cantidad</div>
+      <div style="display:flex;gap:10px;">
+        <input id="rec-cant" class="num" inputmode="decimal" placeholder="0" />
+        <select id="rec-unidad" class="sel" style="max-width:120px;">
+          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
+          <option value="l">L</option><option value="ml">ml</option>
+        </select>
+      </div>
+      <div style="height:14px;"></div>
+      <button id="rec-confirm" class="btn-ok">Registrar recepción</button>
+    </section>
+
+    <!-- ── FLUJO 2: UBICACIÓN (Traslado Interno) ────────────────── -->
+    <section id="view-ubicar" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Ubicación interna</h1>
+      <div class="cam-wrap hidden"><video id="ubicar-cam" muted></video></div>
+      <button id="ubicar-scan" class="btn-prim">Escanear ubicación destino (QR)</button>
+      <div class="card" style="padding:14px;margin-top:14px;">
+        <div class="field-label">Ubicación leída</div>
+        <div id="ubicar-loc" style="font-weight:700;">—</div>
+      </div>
+      <div class="field-label">Ubicación origen</div>
+      <select id="ubicar-origen" class="sel"></select>
+      <div class="field-label">Ubicación destino</div>
+      <select id="ubicar-dest" class="sel"></select>
+      <div class="field-label">Producto (SKU)</div>
+      <input id="ubicar-sku-q" class="txt" placeholder="Buscar SKU…" />
+      <div id="ubicar-sku-res" class="sku-res"></div>
+      <div class="field-label">Lote</div>
+      <select id="ubicar-batch" class="sel"></select>
+      <div class="field-label">Cantidad</div>
+      <div style="display:flex;gap:10px;">
+        <input id="ubicar-cant" class="num" inputmode="decimal" placeholder="0" />
+        <select id="ubicar-unidad" class="sel" style="max-width:120px;">
+          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
+          <option value="l">L</option><option value="ml">ml</option>
+        </select>
+      </div>
+      <div style="height:14px;"></div>
+      <button id="ubicar-confirm" class="btn-ok">Trasladar a ubicación</button>
+    </section>
+
+    <!-- ── FLUJO 3A: SOLICITAR (crea transfer) ──────────────────── -->
+    <section id="view-solicitar" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Solicitar traspaso</h1>
+      <div class="field-label">Origen (Obrador)</div>
+      <div class="ro-field" id="sol-origen-lbl">—</div>
+      <div class="field-label">Destino (tu tienda)</div>
+      <div class="ro-field" id="sol-dest-lbl">—</div>
+      <div class="field-label">Añadir ítem</div>
+      <input id="sol-sku-q" class="txt" placeholder="Buscar SKU…" />
+      <div id="sol-sku-res" class="sku-res"></div>
+      <div style="display:flex;gap:10px;margin-top:10px;">
+        <input id="sol-cant" class="num" inputmode="decimal" placeholder="Cant." />
+        <select id="sol-unidad" class="sel" style="max-width:120px;">
+          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
+          <option value="l">L</option><option value="ml">ml</option>
+        </select>
+        <button id="sol-add" class="btn-prim-sm">Añadir</button>
+      </div>
+      <div id="sol-items" style="margin-top:14px;"></div>
+      <div class="field-label">Notas (opcional)</div>
+      <input id="sol-notes" class="txt" placeholder="Reposición tienda centro" />
+      <div style="height:12px;"></div>
+      <button id="sol-confirm" class="btn-ok">Enviar solicitud</button>
+    </section>
+
+    <!-- ── FLUJO 3B/C: PICKING ──────────────────────────────────── -->
+    <section id="view-picking" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Solicitudes (SOLICITADO)</h1>
+      <div id="picking-list"></div>
+    </section>
+
+    <section id="view-alistar" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 id="alistar-title" class="sec-title">Alistar traspaso</h1>
+      <div id="alistar-grid"></div>
+      <div id="alistar-obs-wrap" class="hidden">
+        <div class="field-label">Observaciones (obligatorio por faltante)</div>
+        <textarea id="alistar-obs" class="txt" placeholder="Justifica el quiebre de stock…"></textarea>
+      </div>
+      <div style="height:12px;"></div>
+      <button id="alistar-confirm" class="btn-ok">Marcar LISTO_DESPACHO</button>
+    </section>
+
+    <!-- ── FLUJO 3D: TRANSPORTE ─────────────────────────────────── -->
+    <section id="view-transporte" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Ruta de transporte</h1>
+      <div id="transporte-list"></div>
+    </section>
+
+    <!-- ── FLUJO 3E: RECIBIR/CERRAR ─────────────────────────────── -->
+    <section id="view-recibir" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Entregas por recibir</h1>
+      <div id="recibir-list"></div>
+    </section>
+
+    <section id="view-cierre" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 id="cierre-title" class="sec-title">Recepción de traspaso</h1>
+      <div id="cierre-grid"></div>
+      <div id="cierre-obs-wrap" class="hidden">
+        <div class="field-label">Observaciones (obligatorio por diferencia)</div>
+        <textarea id="cierre-obs" class="txt" placeholder="Describe la diferencia…"></textarea>
+      </div>
+      <div style="height:12px;"></div>
+      <button id="cierre-confirm" class="btn-ok">Aceptar entrega y CERRAR</button>
+    </section>
+
+    <!-- ── FLUJO 4: MERMA ───────────────────────────────────────── -->
+    <section id="view-merma" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Registrar merma</h1>
+      <div class="field-label">Ubicación</div>
+      <select id="merma-loc" class="sel"></select>
+      <div class="field-label">Producto (SKU)</div>
+      <input id="merma-sku-q" class="txt" placeholder="Buscar SKU…" />
+      <div id="merma-sku-res" class="sku-res"></div>
+      <div class="field-label">Lote</div>
+      <select id="merma-batch" class="sel"></select>
+      <div class="field-label">Cantidad</div>
+      <div style="display:flex;gap:10px;">
+        <input id="merma-cant" class="num" inputmode="decimal" placeholder="0" />
+        <select id="merma-unidad" class="sel" style="max-width:120px;">
+          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
+          <option value="l">L</option><option value="ml">ml</option>
+        </select>
+      </div>
+      <div class="field-label">Razón</div>
+      <select id="merma-razon" class="sel">
+        <option value="">Selecciona…</option>
+        <option value="VENCIMIENTO">VENCIMIENTO</option>
+        <option value="DESPERFECTO">DESPERFECTO</option>
+      </select>
+      <div class="field-label">Observaciones (obligatorio)</div>
+      <textarea id="merma-obs" class="txt" placeholder="Justifica la baja del inventario…"></textarea>
+      <div class="field-label">Evidencia fotográfica (obligatoria)</div>
+      <div class="cam-wrap hidden"><video id="merma-cam" muted></video></div>
+      <img id="merma-foto-prev" class="hidden" style="width:100%;border-radius:14px;margin-bottom:12px;" alt="evidencia" />
+      <button id="merma-capture" class="btn-prim">Capturar fotografía</button>
+      <div style="height:10px;"></div>
+      <button id="merma-confirm" class="btn-ok" disabled>Registrar merma</button>
+    </section>
+
+    <!-- ── GESTOR DE PERMISOS (solo SuperAdmin) ─────────────────── -->
+    <section id="view-permisos" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Gestor de permisos</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 16px;">
+        Asocia cada pantalla del módulo de almacén a los roles operativos del
+        API CORE. El SuperAdmin siempre ve todas las pantallas.</p>
+      <div id="perm-groups" style="display:flex;flex-direction:column;gap:12px;"></div>
+      <div style="height:14px;"></div>
+      <button id="perm-save" class="btn-ok" disabled>Guardar permisos</button>
+    </section>
+
+  </main>
+
+  <!-- ── NUMPAD ─────────────────────────────────────────────────── -->
+  <div id="numpad" class="hidden">
+    <div class="numpad-sheet">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:700;color:#6b7280;">Cantidad</span>
+        <button id="numpad-close" class="btn-del-sm" style="border:0;">Cerrar</button>
+      </div>
+      <div id="numpad-display">0</div>
+      <div class="numpad-grid">
+        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+        <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">⌫</button>
+        <button data-k="ok" class="k-ok">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PARADA DE EMERGENCIA ───────────────────────────────────── -->
+  <div id="view-emergency" class="hidden">
+    <h2>⛔ PARADA DE EMERGENCIA</h2>
+    <p id="emg-msg" style="margin:14px 0 24px;max-width:420px;"></p>
+    <p style="opacity:.9;margin-bottom:24px;max-width:420px;">La cola se detuvo para proteger el Kardex. Requiere intervención manual.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:360px;">
+      <button id="emg-resume" class="btn-ghost">Reintentar (corregí el origen)</button>
+      <button id="emg-discard" class="btn-prim" style="background:#fff;color:#b91c1c;">Descartar transacción y continuar</button>
+    </div>
+  </div>
+
+  <!-- ── TOAST ──────────────────────────────────────────────────── -->
+  <div id="toast" class="hidden" data-type="ok"></div>
+
+  <footer class="wrap" style="text-align:center;color:#9ca3af;font-size:.75rem;padding:24px 16px;">
+    JOSEPAN 360 · OMNI · [1003] © <span id="year"></span>
+  </footer>
+
+  <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
+  <script src="js/api-client.js"></script>
+  <script src="js/metrology.js"></script>
+  <script src="js/scanner.js"></script>
+  <script src="js/outbox-service.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

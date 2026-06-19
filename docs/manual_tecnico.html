@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Manual Técnico · [1003] Almacén y Mermas</title>
+<style>
+  :root { --brand:#642a72; --ink:#1f2430; --mut:#6b7280; --bg:#f4f5f7; --line:#e5e7eb; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+  header { background:var(--brand); color:#fff; padding:28px 22px; }
+  header h1 { margin:0 0 4px; font-size:1.5rem; }
+  header p { margin:0; opacity:.9; font-size:.95rem; }
+  main { max-width:960px; margin:0 auto; padding:24px 18px 64px; }
+  nav { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 18px; margin:18px 0; }
+  nav b { display:block; margin-bottom:6px; color:var(--brand); }
+  nav a { display:inline-block; margin:3px 12px 3px 0; color:var(--brand); text-decoration:none; font-weight:600; font-size:.9rem; }
+  section.card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px 22px; margin:16px 0; }
+  h2 { color:var(--brand); margin:.2em 0 .5em; font-size:1.2rem; }
+  h3 { margin:1em 0 .3em; font-size:1rem; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:.9rem; }
+  th, td { border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th { background:#faf7fb; color:var(--brand); }
+  code { background:#f3edf5; color:var(--brand); padding:1px 6px; border-radius:6px; font-size:.88em; }
+  pre { background:#1f2430; color:#e7e7ea; padding:14px 16px; border-radius:12px; overflow:auto; font-size:.82rem; line-height:1.5; }
+  pre code { background:none; color:inherit; padding:0; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .tree { white-space:pre; font-family:ui-monospace,Menlo,monospace; font-size:.85rem; background:#faf7fb; border:1px solid var(--line); border-radius:10px; padding:14px 16px; overflow:auto; }
+  footer { text-align:center; color:var(--mut); font-size:.82rem; padding:24px; }
+  .pill { display:inline-block; background:#f3edf5; color:var(--brand); font-weight:700; padding:2px 9px; border-radius:999px; font-size:.78rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Manual Técnico</h1>
+  <p>JOSEPAN 360 · OMNI · [1003] Gestión de Almacenes y Mermas — API CORE v6.3.0</p>
+</header>
+<main>
+  <nav>
+    <b>Contenido</b>
+    <a href="#arq">Arquitectura</a>
+    <a href="#estructura">Estructura</a>
+    <a href="#deploy">Despliegue</a>
+    <a href="#contrato">Contrato API</a>
+    <a href="#acciones">Acciones del proxy</a>
+    <a href="#campos">Mapeo de campos</a>
+    <a href="#workflow">Workflow traspaso</a>
+    <a href="#rbac">RBAC / pantallas</a>
+    <a href="#errores">Errores</a>
+  </nav>
+
+  <section class="card" id="arq">
+    <h2>1. Arquitectura</h2>
+    <p>PWA táctil mobile-first sobre <b>LAMP Vanilla</b> (PHP 8.1+, Vanilla JS, sin frameworks). El navegador habla <b>solo</b> con un proxy PHP del mismo origen (<code>api/omni.php</code>) ⇒ cero CORS. El proxy resuelve sesión (cookie HttpOnly + SameSite=Strict), reenvía vía cURL al API CORE añadiendo <code>Authorization: Bearer</code> y <code>X-Interlocutor-Id</code>, y desenvuelve el sobre canónico.</p>
+    <pre><code>Navegador (JS)
+   │  fetch same-origin  api/omni.php?action=...
+   ▼
+Proxy PHP  ──cURL──►  API CORE v6.3.0  (https://api.omni.josepan.app/api/v1)
+   │  Bearer + X-Interlocutor-Id
+   ▼  sobre {status,data,message}  → {ok,data,code}</code></pre>
+  </section>
+
+  <section class="card" id="estructura">
+    <h2>2. Estructura de carpetas</h2>
+    <div class="tree">1003_app/
+├── index.html              SPA maestra (vistas + estilos)
+├── .htaccess               RewriteBase / + cabeceras de seguridad
+├── .env.example            plantilla de configuración
+├── setup.sh                despliegue plug&play
+├── api/
+│   ├── omni.php            proxy mismo-origen + router por ?action=
+│   └── OmniCoreClient.php  SDK cURL (desenvuelve sobre {status,data,message})
+├── js/
+│   ├── api-client.js       cliente mismo-origen (errores tipados)
+│   ├── metrology.js        conversión a unidad base (g/ml/ud)
+│   ├── scanner.js          QR (BarcodeDetector) + foto comprimida + alarma
+│   ├── outbox-service.js   cola FIFO offline + parada de emergencia
+│   └── app.js              router de vistas + lógica de los 4 flujos
+└── docs/
+    ├── manual_usuario.html
+    └── manual_tecnico.html</div>
+  </section>
+
+  <section class="card" id="deploy">
+    <h2>3. Despliegue</h2>
+    <pre><code># En el servidor Debian (deploy por git)
+git pull
+bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
+# editar .env si cambia el host del API CORE</code></pre>
+    <p>Apunta el <code>DocumentRoot</code> del VirtualHost a la raíz del proyecto. El <code>.htaccess</code> fija <code>RewriteBase /</code> (evita el bucle de redirección).</p>
+    <h3>Variables de entorno</h3>
+    <table>
+      <tr><th>Variable</th><th>Por defecto</th><th>Descripción</th></tr>
+      <tr><td class="mono">OMNI_API_HOST</td><td>https://api.omni.josepan.app</td><td>Host del API CORE, sin barra final</td></tr>
+      <tr><td class="mono">OMNI_API_PREFIX</td><td>/api/v1</td><td>Prefijo de versión</td></tr>
+    </table>
+    <p><span class="pill">Importante</span> Ejecutar la migración de BD del API CORE antes de activar el workflow de traspasos.</p>
+  </section>
+
+  <section class="card" id="contrato">
+    <h2>4. Contrato del API (sobre)</h2>
+    <p>El API CORE responde <code>{ status:"success"|"error", data, message }</code>. El SDK lo normaliza a <code>{ ok, data, error }</code> y el proxy emite al navegador <code>{ ok, data, code }</code>. El <span class="mono">error_code</span> viaja en <code>message</code>.</p>
+  </section>
+
+  <section class="card" id="acciones">
+    <h2>5. Acciones del proxy → endpoints</h2>
+    <table>
+      <tr><th>Acción <code>?action=</code></th><th>Método</th><th>Endpoint API CORE</th></tr>
+      <tr><td>login / session / logout</td><td>POST/GET</td><td>/auth/login · /auth/me</td></tr>
+      <tr><td>set_interlocutor</td><td>POST</td><td>(sesión) fija X-Interlocutor-Id de trabajo</td></tr>
+      <tr><td>catalog (resource=skus|locations|interlocutors|employees|rutas)</td><td>GET</td><td>/catalog/* · rutas→/logistics/routes</td></tr>
+      <tr><td>stock</td><td>GET</td><td>/inventory/stock</td></tr>
+      <tr><td>batches (item_id=)</td><td>GET</td><td>/inventory/batches</td></tr>
+      <tr><td>reception</td><td>POST</td><td>/inventory/reception</td></tr>
+      <tr><td>ubicar</td><td>POST</td><td>/inventory/transfer (Traslado Interno)</td></tr>
+      <tr><td>merma</td><td>POST</td><td>/inventory/scrap</td></tr>
+      <tr><td>traspaso_solicitar</td><td>POST</td><td>/inventory/transfers</td></tr>
+      <tr><td>traspasos_listar</td><td>GET</td><td>/inventory/transfers?state=</td></tr>
+      <tr><td>picking_iniciar</td><td>PUT</td><td>/inventory/transfers/{id}/picking</td></tr>
+      <tr><td>picking_alistar</td><td>PUT</td><td>/inventory/transfers/{id}/dispatch</td></tr>
+      <tr><td>transporte_ruta</td><td>PUT</td><td>/inventory/transfers/{id}/route</td></tr>
+      <tr><td>transporte_entregar</td><td>PUT</td><td>/inventory/transfers/{id}/deliver</td></tr>
+      <tr><td>traspaso_cerrar</td><td>PUT</td><td>/inventory/transfers/{id}/close</td></tr>
+      <tr><td>mis_pantallas</td><td>GET</td><td>/rbac/subsystems/1003/my-screens</td></tr>
+      <tr><td>roles_listar / perms_listar / perms_guardar</td><td>GET/PUT</td><td>/rbac/roles · /rbac/subsystems/1003/screen-permissions</td></tr>
+    </table>
+  </section>
+
+  <section class="card" id="campos">
+    <h2>6. Mapeo de campos (v6.3.0)</h2>
+    <table>
+      <tr><th>Recurso</th><th>Campo en API</th><th>Uso en [1003]</th></tr>
+      <tr><td rowspan="3">SKUs</td><td class="mono">name</td><td>etiqueta</td></tr>
+      <tr><td class="mono">sku_final_code</td><td>código mostrado</td></tr>
+      <tr><td class="mono">id → item_id</td><td>identificador (item_type: "sku")</td></tr>
+      <tr><td rowspan="2">Ubicaciones</td><td class="mono">qr_code_uid</td><td>casado del escaneo QR</td></tr>
+      <tr><td class="mono">area_type+shelf+position</td><td>etiqueta · id → location_id</td></tr>
+      <tr><td rowspan="3">Lotes</td><td class="mono">batch_reference</td><td>código de lote</td></tr>
+      <tr><td class="mono">expiration_date</td><td>caducidad (FEFO)</td></tr>
+      <tr><td class="mono">id → batch_id</td><td>filtrable por <code>?item_id=</code></td></tr>
+    </table>
+    <h3>Recepción con lote inline</h3>
+    <pre><code>{
+  "location_id": 1, "item_id": 1, "item_type": "sku",
+  "batch": { "batch_reference": "L-PROV-778", "expiration_date": "2026-09-15" },
+  "quantity": 25000, "movement_type": "Compra",
+  "reference_document": "ALB-2026-001"
+}</code></pre>
+  </section>
+
+  <section class="card" id="workflow">
+    <h2>7. Workflow de traspaso externo</h2>
+    <p>Estados: <span class="mono">SOLICITADO → EN_PICKING → LISTO_DESPACHO → EN_RUTA → PENDIENTE_RECEPCION → CERRADO</span>. El stock se descuenta de origen en <code>route</code> y se incrementa en destino en <code>close</code>.</p>
+    <table>
+      <tr><th>Transición</th><th>Body</th></tr>
+      <tr><td>POST /transfers</td><td><span class="mono">{location_id_origin, location_id_destination, items:[{item_id,item_type,batch_id,quantity_requested}], notes}</span></td></tr>
+      <tr><td>PUT /{id}/dispatch</td><td><span class="mono">{items:[{item_id,batch_id,quantity_dispatched}]}</span></td></tr>
+      <tr><td>PUT /{id}/route</td><td><span class="mono">{route_id}</span></td></tr>
+      <tr><td>PUT /{id}/close</td><td><span class="mono">{items:[{item_id,batch_id,quantity_received}]}</span></td></tr>
+    </table>
+    <p>El <b>RBAC por transición y estado previo lo valida el API CORE</b>. El proxy delega (mantiene auth + same-origin). Respuestas con <code>transfer_id</code> y <code>state</code>.</p>
+  </section>
+
+  <section class="card" id="rbac">
+    <h2>8. RBAC de pantallas</h2>
+    <p>En el login [1003] llama <code>mis_pantallas</code> → <code>/my-screens</code>: SuperAdmin recibe <code>"*"</code>; el resto, la lista filtrada por su rol. El SuperAdmin edita el mapa (pantalla → roles) con el <b>Gestor de Permisos</b> (<code>roles_listar</code>, <code>perms_listar</code>, <code>perms_guardar</code>), restringido en el proxy con <code>requireSuperAdmin()</code>. Claves de pantalla: <span class="mono">recepcion, ubicar, picking, transporte, solicitar, recibir, merma, dashboard</span>.</p>
+    <h3>Selección de tienda (interlocutor)</h3>
+    <p>El login es en dos fases: (1) credenciales → token; el proxy lista <code>/catalog/interlocutors</code>; (2) el usuario elige su tienda/bodega y <code>set_interlocutor</code> fija <code>X-Interlocutor-Id</code> en la sesión. Todo el filtrado perimetral (catálogos, traspasos, panel) usa ese interlocutor.</p>
+    <p>SuperAdmin siempre ve todas las pantallas. La detección es robusta (normaliza el rol y comprueba que contenga <code>superadmin</code>), por lo que admite variantes como <code>SuperAdministrador</code>, tanto en el cliente como en el proxy (<code>requireSuperAdmin()</code>).</p>
+    <h3>Catálogo de pantallas (SSOT)</h3>
+    <p>El Gestor de Permisos pobla su matriz desde <code>GET /rbac/subsystems/1003/screens</code> (catálogo de claves registradas en el API CORE), intersecado con las pantallas que [1003] sabe renderizar (<code>TILE_META</code>); si el catálogo no responde, usa las locales. Así solo se ofrecen claves válidas (evita 422 al guardar) y una clave nueva (p.ej. <code>dashboard</code>) aparece en cuanto se registra en el API CORE. El alta/baja de claves se hace desde el admin del API CORE o vía curl, no desde [1003].</p>
+    <p>Los selectores operativos solo muestran SKUs con <code>status: "active"</code> (filtro <code>?status=active</code> + verificación en cliente). El <b>Panel de traspasos</b> es un informe histórico y muestra la información sin importar el estado del SKU.</p>
+    <h3>Búsqueda de SKU (typeahead)</h3>
+    <p>Con el catálogo estandarizado (~1000 SKUs) los selectores de SKU se sustituyen por un buscador con debounce que consulta <code>GET /catalog/skus?q=&status=active&limit=30</code>. Aplica a recepción, ubicación, merma y solicitud.</p>
+    <h3>Solicitud de traspaso sin lote</h3>
+    <p>Al crear la solicitud (<code>POST /inventory/transfers</code>) los ítems se envían como <span class="mono">{item_id, item_type, quantity_requested}</span> <b>sin</b> <code>batch_id</code>: el lote se asigna por FEFO en el picking/despacho. El <b>origen</b> se resuelve al interlocutor OBRADOR (<code>/catalog/interlocutors?type=fabrica</code>) y el <b>destino</b> al interlocutor de trabajo; ambos se mapean a su <code>location_id</code> vía <code>/catalog/locations</code> (campo <code>interlocutor_id</code>) y se muestran como solo lectura. El buscador de SKU es persistente: muestra el listado y lo filtra con <code>?q=</code>.</p>
+    <h3>Listas de traspaso vacías</h3>
+    <p>Las bandejas de picking, transporte y recepción muestran «No hay traspasos pendientes.» tanto si la respuesta es vacía como si el endpoint aún no responde (p.ej. workflow no migrado), evitando un error visible al operario.</p>
+    <h3>Home ordenado y por color</h3>
+    <p>El hub ordena los accesos por <code>TILE_ORDER</code> y colorea el borde de cada tile según el área/rol responsable (Almacén, Transporte, Tienda, Mermas, Gestión), con leyenda.</p>
+  </section>
+
+  <section class="card" id="errores">
+    <h2>9. Códigos de error</h2>
+    <table>
+      <tr><th>HTTP</th><th>code</th><th>Cuándo</th></tr>
+      <tr><td>401</td><td class="mono">ERR_AUTH</td><td>token ausente/expirado</td></tr>
+      <tr><td>403</td><td class="mono">ERR_RBAC</td><td>rol insuficiente</td></tr>
+      <tr><td>404</td><td class="mono">ERR_NOT_FOUND</td><td>recurso inexistente</td></tr>
+      <tr><td>409</td><td class="mono">ERR_STATE</td><td>transición inválida</td></tr>
+      <tr><td>409</td><td class="mono">ERR_STOCK</td><td>stock insuficiente</td></tr>
+      <tr><td>409</td><td class="mono">ERR_DUPLICATE</td><td>documento ya procesado</td></tr>
+      <tr><td>422</td><td class="mono">ERR_PARAM</td><td>campo/valor inválido</td></tr>
+      <tr><td>500</td><td class="mono">ERR_INTERNAL</td><td>error del servidor</td></tr>
+    </table>
+    <p>El cliente tipa los errores (NETWORK/UNAUTHORIZED/RBAC/VALIDATION/CONFLICT/SERVER). Ante error fatal no recuperable se activa la parada de emergencia y la cola Outbox se detiene.</p>
+  </section>
+</main>
+<footer>JOSEPAN 360 · OMNI · [1003] — Manual técnico · API CORE v6.3.0</footer>
+</body>
+</html>

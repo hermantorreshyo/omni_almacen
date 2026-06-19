@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guía rápida · Almacén y Mermas</title>
+<style>
+  :root{
+    --brand:#642a72; --brand2:#7e3a90; --ink:#222633; --mut:#6b7280; --bg:#f6f4f8; --line:#ece8f0;
+    --almacen:#642a72; --transporte:#F59E0B; --tienda:#2563eb; --mermas:#EF4444; --gestion:#6b7280; --ok:#10B981;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.62;}
+  .hero{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;padding:46px 22px 40px;text-align:center;}
+  .hero .kick{font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;opacity:.85;}
+  .hero h1{margin:8px 0 6px;font-size:2rem;font-weight:800;}
+  .hero p{margin:0;opacity:.92;}
+  main{max-width:820px;margin:0 auto;padding:0 16px 72px;}
+  .toc{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:-26px 0 26px;position:relative;z-index:2;}
+  .toc a{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;text-decoration:none;color:var(--ink);font-weight:600;font-size:.92rem;box-shadow:0 6px 18px rgba(100,42,114,.06);display:flex;align-items:center;gap:10px;transition:transform .12s;}
+  .toc a:hover{transform:translateY(-2px);}
+  .toc .dot{width:10px;height:10px;border-radius:50%;flex:none;}
+  .card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:24px 24px 20px;margin:18px 0;box-shadow:0 8px 26px rgba(100,42,114,.05);}
+  .card.area{border-left:6px solid var(--brand);}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:5px 12px;border-radius:999px;color:#fff;margin-bottom:10px;}
+  h2{margin:.1em 0 .5em;font-size:1.3rem;}
+  h2 .num{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--brand);color:#fff;font-size:.95rem;margin-right:10px;vertical-align:middle;}
+  ol.steps{list-style:none;counter-reset:s;padding:0;margin:14px 0 6px;}
+  ol.steps li{counter-increment:s;position:relative;padding:8px 0 8px 44px;border-bottom:1px dashed #efeaf3;}
+  ol.steps li:last-child{border-bottom:0;}
+  ol.steps li::before{content:counter(s);position:absolute;left:0;top:7px;width:28px;height:28px;border-radius:50%;background:#f3edf5;color:var(--brand);font-weight:800;display:grid;place-items:center;font-size:.85rem;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.78rem;font-weight:700;}
+  .pill.ok{background:rgba(16,185,129,.13);color:#0a7d54;} .pill.rojo{background:rgba(239,68,68,.12);color:#b42323;} .pill.amb{background:rgba(245,158,11,.15);color:#a86a06;}
+  .tip{display:flex;gap:12px;background:#faf7fb;border:1px solid var(--line);border-radius:14px;padding:13px 16px;margin:14px 0 2px;font-size:.92rem;}
+  .tip .ic{font-size:1.1rem;}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:700;font-size:.78rem;margin:6px 0 4px;}
+  .flow b{background:#f3edf5;color:var(--brand);padding:6px 11px;border-radius:9px;}
+  .flow .ar{color:var(--mut);}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;}
+  .legend span{display:inline-flex;align-items:center;gap:7px;font-size:.86rem;color:#444;}
+  .legend i{width:14px;height:14px;border-radius:4px;}
+  footer{text-align:center;color:var(--mut);font-size:.82rem;padding:26px;}
+  b.k{color:var(--brand);}
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="kick">JOSEPAN 360 · OMNI</div>
+  <h1>Guía rápida de uso</h1>
+  <p>Gestión de Almacenes y Mermas · [1003]</p>
+</div>
+<main>
+  <nav class="toc">
+    <a href="#acceso"><span class="dot" style="background:var(--brand)"></span>Entrar</a>
+    <a href="#home"><span class="dot" style="background:var(--gestion)"></span>Inicio</a>
+    <a href="#recepcion"><span class="dot" style="background:var(--almacen)"></span>Recepción</a>
+    <a href="#ubicar"><span class="dot" style="background:var(--almacen)"></span>Ubicación</a>
+    <a href="#traspaso"><span class="dot" style="background:var(--tienda)"></span>Traspasos</a>
+    <a href="#merma"><span class="dot" style="background:var(--mermas)"></span>Mermas</a>
+    <a href="#panel"><span class="dot" style="background:var(--gestion)"></span>Panel</a>
+    <a href="#offline"><span class="dot" style="background:var(--transporte)"></span>Sin conexión</a>
+  </nav>
+
+  <section class="card" id="acceso">
+    <h2><span class="num">1</span>Entrar a la app</h2>
+    <ol class="steps">
+      <li>Abre la dirección de la app en el navegador del terminal.</li>
+      <li>Escribe tu <b class="k">usuario</b> y <b class="k">contraseña</b> y pulsa <b>Entrar</b>.</li>
+      <li>Elige la <b class="k">tienda o bodega</b> donde trabajas hoy y pulsa <b>Continuar</b>.</li>
+    </ol>
+    <div class="tip"><span class="ic">💡</span><div>Si trabajas en bodega, selecciona el interlocutor de tu bodega. Solo verás la información de la tienda que elijas.</div></div>
+  </section>
+
+  <section class="card" id="home">
+    <h2><span class="num">2</span>Pantalla de inicio</h2>
+    <p>Verás solo las tareas que te corresponden, ordenadas y con un <b>color por área</b> para ubicarte de un vistazo:</p>
+    <div class="legend">
+      <span><i style="background:var(--almacen)"></i>Almacén</span>
+      <span><i style="background:var(--transporte)"></i>Transporte</span>
+      <span><i style="background:var(--tienda)"></i>Tienda</span>
+      <span><i style="background:var(--mermas)"></i>Mermas</span>
+      <span><i style="background:var(--gestion)"></i>Gestión</span>
+    </div>
+    <div class="tip"><span class="ic">🔌</span><div>Arriba a la derecha está <b>Salir</b> y un aviso cuando estás <span class="pill amb">sin conexión</span>.</div></div>
+  </section>
+
+  <section class="card area" id="recepcion" style="border-left-color:var(--almacen)">
+    <span class="badge" style="background:var(--almacen)">Almacén</span>
+    <h2><span class="num">3</span>Recepción de mercancía</h2>
+    <p>Da de alta el stock que llega con un albarán de compra.</p>
+    <ol class="steps">
+      <li>Escribe el <b class="k">nº de albarán</b> del proveedor.</li>
+      <li>Elige la <b class="k">ubicación destino</b>.</li>
+      <li><b class="k">Busca el SKU</b>: escribe parte del nombre o código y selecciónalo.</li>
+      <li>Indica la <b class="k">referencia de lote</b> del proveedor y su <b class="k">caducidad</b>.</li>
+      <li>Pon la <b class="k">cantidad</b> y su unidad, y pulsa <b>Registrar recepción</b>.</li>
+    </ol>
+    <div class="tip"><span class="ic">✅</span><div>El lote se crea solo al registrar. <span class="pill ok">Stock sumado</span></div></div>
+  </section>
+
+  <section class="card area" id="ubicar" style="border-left-color:var(--almacen)">
+    <span class="badge" style="background:var(--almacen)">Almacén</span>
+    <h2><span class="num">4</span>Ubicación interna</h2>
+    <p>Mueve producto de una ubicación a otra dentro del almacén.</p>
+    <ol class="steps">
+      <li>Pulsa <b>Escanear ubicación destino (QR)</b> y enfoca la etiqueta del estante.</li>
+      <li>Confirma <b class="k">origen</b> y <b class="k">destino</b>.</li>
+      <li><b class="k">Busca el SKU</b>; se cargarán sus lotes y eliges uno.</li>
+      <li>Indica la <b class="k">cantidad</b> y pulsa <b>Trasladar a ubicación</b>.</li>
+    </ol>
+  </section>
+
+  <section class="card area" id="traspaso" style="border-left-color:var(--tienda)">
+    <span class="badge" style="background:var(--tienda)">Tienda · Almacén · Transporte</span>
+    <h2><span class="num">5</span>Traspasos entre sedes</h2>
+    <p>Es un proceso por etapas; cada quien hace su parte:</p>
+    <div class="flow"><b>Solicitado</b><span class="ar">→</span><b>Picking</b><span class="ar">→</span><b>Listo</b><span class="ar">→</span><b>En ruta</b><span class="ar">→</span><b>Pend. recepción</b><span class="ar">→</span><b>Cerrado</b></div>
+    <h3 style="margin-top:14px;color:var(--tienda)">Solicitar (tienda)</h3>
+    <ol class="steps">
+      <li>El <b class="k">origen</b> (Obrador) y el <b class="k">destino</b> (tu tienda) aparecen ya fijados; no hay que elegirlos.</li>
+      <li>Por cada ítem: <b class="k">busca o elige el SKU</b> del listado, pon la <b class="k">cantidad</b> y pulsa <b>Añadir</b>. No se pide el lote.</li>
+      <li>Añade una <b class="k">nota</b> si quieres y pulsa <b>Enviar solicitud</b>.</li>
+    </ol>
+    <h3 style="color:var(--almacen)">Picking (almacén)</h3>
+    <p>Toca una solicitud para <b>iniciar</b>, escribe las <b class="k">cantidades despachadas</b> y marca <b>Listo</b>. Si despachas de menos, justifica en observaciones.</p>
+    <h3 style="color:var(--transporte)">Transporte</h3>
+    <p>Elige la <b class="k">ruta</b>, pulsa <b>En ruta</b> y al llegar pulsa <b>Entregar</b>.</p>
+    <h3 style="color:var(--tienda)">Recepción y cierre (tienda)</h3>
+    <p>Cuenta las <b class="k">cantidades recibidas</b> y pulsa <b>Cerrar</b>. <span class="pill ok">Stock sumado en destino</span></p>
+  </section>
+
+  <section class="card area" id="merma" style="border-left-color:var(--mermas)">
+    <span class="badge" style="background:var(--mermas)">Mermas</span>
+    <h2><span class="num">6</span>Registrar una merma</h2>
+    <ol class="steps">
+      <li>Elige <b class="k">ubicación</b>, <b class="k">busca el SKU</b> y elige el <b class="k">lote</b>.</li>
+      <li>Pon la <b class="k">cantidad</b> y la <b class="k">razón</b> (vencimiento o desperfecto).</li>
+      <li>Escribe las <b class="k">observaciones</b> (obligatorias).</li>
+      <li>Pulsa <b>Capturar foto</b>: la evidencia es obligatoria y habilita el botón.</li>
+      <li>Pulsa <b>Registrar merma</b>. <span class="pill rojo">Stock descontado</span></li>
+    </ol>
+  </section>
+
+  <section class="card area" id="panel" style="border-left-color:var(--gestion)">
+    <span class="badge" style="background:var(--gestion)">Gestión</span>
+    <h2><span class="num">7</span>Panel de traspasos</h2>
+    <p>Consulta los traspasos de tu tienda con indicadores (total, en curso, cerrados, % completado), un desglose por estado y el detalle reciente. Es un informe: muestra todo aunque algún producto ya no esté activo. Cada tienda ve solo lo suyo.</p>
+  </section>
+
+  <section class="card" id="offline">
+    <h2><span class="num">8</span>Si te quedas sin conexión</h2>
+    <p>La app sigue funcionando: tus envíos se guardan en una <b>cola</b> y se sincronizan solos al volver la red.</p>
+    <div class="tip"><span class="ic">🛑</span><div>Si un envío falla por un dato inválido, la app muestra una <b>pantalla roja</b> con sonido. Avisa al encargado antes de continuar.</div></div>
+  </section>
+
+  <div class="tip" style="background:#f3edf5;border-color:#e7dcec;">
+    <span class="ic">👤</span><div>El <b class="k">SuperAdmin</b> ve todas las pantallas (para pruebas y administración) y dispone del <b>Gestor de Permisos</b> para decidir qué rol ve cada pantalla.</div>
+  </div>
+</main>
+<footer>JOSEPAN 360 · OMNI · [1003] — Guía rápida de usuario</footer>
+</body>
+</html>
