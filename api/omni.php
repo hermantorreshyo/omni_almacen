@@ -154,7 +154,7 @@ function requireSuperAdmin(): array
 function relay(array $res): void
 {
     out(
-        ['ok' => $res['ok'], 'data' => $res['data'], 'code' => $res['error']],
+        ['ok' => $res['ok'], 'data' => $res['data'], 'error' => $res['error'] ?? null, 'code' => $res['code'] ?? $res['error'] ?? null],
         $res['ok'] ? 200 : ($res['status'] ?: 502)
     );
 }

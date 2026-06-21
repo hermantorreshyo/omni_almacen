@@ -1,0 +1,870 @@
+{
+  "info": {
+    "name": "JOSEPAN OMNI [1003] Almacén y Mermas — Proxy",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Acciones del proxy mismo-origen api/omni.php del subsistema [1003]. base_url = host del subsistema (p.ej. https://produccion.omni.josepan.app). El proxy inyecta Bearer + X-Interlocutor-Id contra el API CORE v6.6.0."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://produccion.omni.josepan.app"
+    }
+  ],
+  "item": [
+    {
+      "name": "Sesión",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "login"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuario\": \"herman.torres\",\n  \"password\": \"herman.torres\",\n  \"interlocutor_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Fijar interlocutor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=set_interlocutor",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "set_interlocutor"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"interlocutor_id\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Sesión actual",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=session",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "session"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "logout"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mis pantallas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=mis_pantallas",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "mis_pantallas"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catálogo",
+      "item": [
+        {
+          "name": "SKUs (buscar activos)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=catalog&resource=skus&q=pan&status=active&limit=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "catalog"
+                },
+                {
+                  "key": "resource",
+                  "value": "skus"
+                },
+                {
+                  "key": "q",
+                  "value": "pan"
+                },
+                {
+                  "key": "status",
+                  "value": "active"
+                },
+                {
+                  "key": "limit",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ubicaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=catalog&resource=locations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "catalog"
+                },
+                {
+                  "key": "resource",
+                  "value": "locations"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Interlocutores (fábrica/Obrador)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=catalog&resource=interlocutors&type=fabrica",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "catalog"
+                },
+                {
+                  "key": "resource",
+                  "value": "interlocutors"
+                },
+                {
+                  "key": "type",
+                  "value": "fabrica"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Lotes por SKU (FEFO)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=batches&item_id=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "batches"
+                },
+                {
+                  "key": "item_id",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Stock por ubicación",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=stock&location_id=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "stock"
+                },
+                {
+                  "key": "location_id",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Recepción",
+      "item": [
+        {
+          "name": "Recepción (lote inline)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=reception",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "reception"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location_id\": 5,\n  \"item_id\": 7,\n  \"item_type\": \"sku\",\n  \"batch\": {\n    \"batch_reference\": \"L-PROV-778\",\n    \"expiration_date\": \"2026-09-15\"\n  },\n  \"quantity\": 25000,\n  \"movement_type\": \"Compra\",\n  \"reference_document\": \"ALB-2026-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ubicación (Traslado Interno)",
+      "item": [
+        {
+          "name": "Ubicar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=ubicar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "ubicar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 10,\n  \"item_id\": 7,\n  \"item_type\": \"sku\",\n  \"batch_id\": 3,\n  \"quantity\": 1000,\n  \"movement_type\": \"Traslado Interno\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Traspaso externo (workflow)",
+      "item": [
+        {
+          "name": "Solicitar (sin lote)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=traspaso_solicitar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "traspaso_solicitar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 10,\n  \"items\": [\n    {\n      \"item_id\": 5,\n      \"item_type\": \"sku\",\n      \"quantity_requested\": 2000\n    }\n  ],\n  \"notes\": \"Reposición tienda centro\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Listar por estado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=traspasos_listar&estado=SOLICITADO",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "traspasos_listar"
+                },
+                {
+                  "key": "estado",
+                  "value": "SOLICITADO"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Picking: iniciar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=picking_iniciar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "picking_iniciar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"traspaso_id\": 42\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Picking: alistar (dispatch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=picking_alistar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "picking_alistar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"traspaso_id\": 42,\n  \"items\": [\n    {\n      \"item_id\": 5,\n      \"batch_id\": 1,\n      \"quantity_dispatched\": 1980\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Transporte: en ruta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=transporte_ruta",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "transporte_ruta"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"traspaso_id\": 42,\n  \"ruta_id\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Transporte: entregar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=transporte_entregar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "transporte_entregar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"traspaso_id\": 42\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Recibir: cerrar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=traspaso_cerrar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "traspaso_cerrar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"traspaso_id\": 42,\n  \"items\": [\n    {\n      \"item_id\": 5,\n      \"batch_id\": 1,\n      \"quantity_received\": 1975\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mermas",
+      "item": [
+        {
+          "name": "Registrar merma",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=merma",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "merma"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location_id\": 5,\n  \"item_id\": 7,\n  \"item_type\": \"sku\",\n  \"batch_id\": 3,\n  \"quantity\": 500,\n  \"reason\": \"Producto caducado — verificado por encargado\",\n  \"file_data\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RBAC (SuperAdmin)",
+      "item": [
+        {
+          "name": "Roles operativos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=roles_listar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "roles_listar"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Pantallas registradas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=screens_listar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "screens_listar"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Leer mapa de permisos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=perms_listar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "perms_listar"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Guardar mapa de permisos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=perms_guardar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "perms_guardar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": {\n    \"recepcion\": [\n      \"Jefe de Almacen\"\n    ],\n    \"merma\": [\n      \"Encargado de Tienda\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

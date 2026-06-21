@@ -70,8 +70,12 @@ const ApiClient = (() => {
     try { data = await res.json(); } catch (_) { /* respuesta no-JSON */ }
 
     if (!res.ok || data.ok === false) {
+      const type = _classify(res.status);
+      if (type === ERR.UNAUTHORIZED) {
+        try { window.dispatchEvent(new CustomEvent('omni:session-expired')); } catch (_) {}
+      }
       throw new ApiError(
-        _classify(res.status),
+        type,
         data.error || `Error HTTP ${res.status}`,
         res.status,
         data.code || null,

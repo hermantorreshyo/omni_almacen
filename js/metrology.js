@@ -55,5 +55,22 @@ const Metrology = (() => {
     return `${qty} ${unit} → ${toBase(qty, unit, packSize)} ${baseUnit(unit)}`;
   }
 
-  return { FACTORS, baseUnit, toBase, describe };
+  /**
+   * Formatea una cantidad en unidad base para mostrarla al usuario aplicando
+   * pack_size (manual desarrollador §20). sku = { unit_of_measure, pack_size }.
+   */
+  function formatQty(quantity, sku = {}) {
+    const u = String(sku.unit_of_measure || 'ud').toLowerCase();
+    const pack = Number(sku.pack_size) || 1;
+    const q = Number(quantity) || 0;
+    if (u === 'ud' && pack > 1) {
+      const tot = q * pack;
+      return `${q} ud (${tot >= 1000 ? (tot / 1000).toFixed(2) + ' kg' : tot + ' g'})`;
+    }
+    if (u === 'g')  return q >= 1000 ? (q / 1000).toFixed(2) + ' kg' : q + ' g';
+    if (u === 'ml') return q >= 1000 ? (q / 1000).toFixed(2) + ' L'  : q + ' ml';
+    return q + ' ud';
+  }
+
+  return { FACTORS, baseUnit, toBase, describe, formatQty };
 })();

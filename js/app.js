@@ -90,6 +90,7 @@ const App = (() => {
     refreshOfflineBadge();
     wireOutboxEvents();
     wireLogin();
+    window.addEventListener('omni:session-expired', onSessionExpired);
 
     try {
       const s = await ApiClient.session();
@@ -132,6 +133,18 @@ const App = (() => {
   function setIdentity(data) {
     state.user = data.user || {};
     state.rol  = data.rol || state.user.rol || state.user.role || null;
+  }
+
+  /* Token expirado (8 h) o no autorizado → volver al login. */
+  let _expiring = false;
+  function onSessionExpired() {
+    if (_expiring) return;
+    _expiring = true;
+    el('app-header').classList.add('hidden');
+    state.user = null; state.rol = null; state.screens = null;
+    view('view-login');
+    toast('Tu sesión expiró. Vuelve a entrar.', 'warn');
+    setTimeout(() => { _expiring = false; }, 1500);
   }
 
   /* Fase 2: elegir tienda / interlocutor de trabajo. */

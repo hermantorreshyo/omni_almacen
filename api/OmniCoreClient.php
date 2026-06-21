@@ -131,7 +131,7 @@ final class OmniCoreClient
         $data = json_decode($raw, true);
         $httpOk = $status >= 200 && $status < 300;
 
-        // Sobre canónico OMNI API CORE v6: { status:'success'|'error', data, message }
+        // Sobre canónico OMNI API CORE v6.6.0: { status, data, message, error_code }
         if (is_array($data) && isset($data['status']) && in_array($data['status'], ['success', 'error'], true)) {
             $ok = $data['status'] === 'success';
             return [
@@ -139,6 +139,7 @@ final class OmniCoreClient
                 'status' => $status,
                 'data'   => $data['data'] ?? null,                     // payload interno desenvuelto
                 'error'  => $ok ? null : ($data['message'] ?? 'ERR_API'),
+                'code'   => $ok ? null : ($data['error_code'] ?? null),
             ];
         }
 

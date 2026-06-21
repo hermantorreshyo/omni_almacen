@@ -33,7 +33,7 @@
 <body>
 <header>
   <h1>Manual Técnico</h1>
-  <p>JOSEPAN 360 · OMNI · [1003] Gestión de Almacenes y Mermas — API CORE v6.3.0</p>
+  <p>JOSEPAN 360 · OMNI · [1003] Gestión de Almacenes y Mermas — API CORE v6.6.0</p>
 </header>
 <main>
   <nav>
@@ -55,7 +55,7 @@
     <pre><code>Navegador (JS)
    │  fetch same-origin  api/omni.php?action=...
    ▼
-Proxy PHP  ──cURL──►  API CORE v6.3.0  (https://api.omni.josepan.app/api/v1)
+Proxy PHP  ──cURL──►  API CORE v6.6.0  (https://api.omni.josepan.app/api/v1)
    │  Bearer + X-Interlocutor-Id
    ▼  sobre {status,data,message}  → {ok,data,code}</code></pre>
   </section>
@@ -99,7 +99,7 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
 
   <section class="card" id="contrato">
     <h2>4. Contrato del API (sobre)</h2>
-    <p>El API CORE responde <code>{ status:"success"|"error", data, message }</code>. El SDK lo normaliza a <code>{ ok, data, error }</code> y el proxy emite al navegador <code>{ ok, data, code }</code>. El <span class="mono">error_code</span> viaja en <code>message</code>.</p>
+    <p>El API CORE responde <code>{ status:"success"|"error", data, message, error_code }</code>. El SDK lo normaliza a <code>{ ok, data, error, code }</code> y el proxy emite al navegador <code>{ ok, data, error, code }</code>. El token expira en <b>8 h</b>; ante <code>401 ERR_AUTH</code> el cliente emite <code>omni:session-expired</code> y vuelve al login. Las cantidades se muestran con <code>Metrology.formatQty</code> aplicando <code>pack_size</code> (ej. <code>4 ud (28 kg)</code>).</p>
   </section>
 
   <section class="card" id="acciones">
@@ -127,7 +127,7 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
   </section>
 
   <section class="card" id="campos">
-    <h2>6. Mapeo de campos (v6.3.0)</h2>
+    <h2>6. Mapeo de campos (v6.6.0)</h2>
     <table>
       <tr><th>Recurso</th><th>Campo en API</th><th>Uso en [1003]</th></tr>
       <tr><td rowspan="3">SKUs</td><td class="mono">name</td><td>etiqueta</td></tr>
@@ -196,6 +196,6 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
     <p>El cliente tipa los errores (NETWORK/UNAUTHORIZED/RBAC/VALIDATION/CONFLICT/SERVER). Ante error fatal no recuperable se activa la parada de emergencia y la cola Outbox se detiene.</p>
   </section>
 </main>
-<footer>JOSEPAN 360 · OMNI · [1003] — Manual técnico · API CORE v6.3.0</footer>
+<footer>JOSEPAN 360 · OMNI · [1003] — Manual técnico · API CORE v6.6.0</footer>
 </body>
 </html>

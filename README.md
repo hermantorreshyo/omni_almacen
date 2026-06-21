@@ -76,7 +76,7 @@ API no responde el mapa, el cliente cae a sus valores por defecto.
 Resiliencia offline mediante **Outbox** (cola FIFO en `localStorage`). Ante error
 fatal no recuperable se activa la **parada de emergencia** (pantalla roja + alarma).
 
-## Contrato del API CORE v6.3.0
+## Contrato del API CORE v6.6.0
 
 El SDK (`api/OmniCoreClient.php`) **desenvuelve** el sobre canónico
 `{ status, data, message }`. Mapeo de campos reales aplicado en el cliente:
@@ -94,6 +94,13 @@ Workflow de traspaso externo en `/inventory/transfers` (plural, multi-estado):
 ítems `{item_id,batch_id,quantity_requested|dispatched|received}`. El **RBAC por
 transición lo aplica el API CORE** (autoridad); el proxy mantiene auth y
 same-origin, y la visibilidad de pantallas la entrega `my-screens` en el login.
+
+## Documentación del proyecto (carpeta `docs/`)
+
+- `manual_usuario.html` — guía rápida para el operario (HTML autocontenido).
+- `manual_tecnico.html` — manual técnico/desarrollador (HTML autocontenido).
+- `prompt-maestro-proyecto.md` — prompt de reconstrucción completa del subsistema.
+- `1003-postman-collection.json` — colección Postman de las acciones del proxy.
 
 ## Pendiente de validación
 
