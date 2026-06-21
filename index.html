@@ -90,6 +90,12 @@
     .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
     .sku-opt.sel { background: #642a72; color: #fff; }
     .ro-field { background: #f3edf5; border: 1px solid #e7dcec; color: #642a72; font-weight: 700; border-radius: 12px; padding: 12px 14px; min-height: 46px; display: flex; align-items: center; }
+    .oc-card { background: #fff; border: 1px solid #e5e7eb; border-left: 5px solid #642a72; border-radius: 16px; padding: 16px; }
+    .oc-card.oc-done { border-left-color: #10B981; background: #f5fbf8; }
+    .oc-card-h { display: flex; flex-direction: column; }
+    .oc-card-h b { font-size: 1rem; } .oc-card-h small { color: #6b7280; }
+    .oc-card-sub { font-size: .85rem; color: #374151; margin: 4px 0 8px; }
+    .oc-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
     .hub-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
     .hub-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #4b5563; }
     .hub-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -199,31 +205,21 @@
       <div id="dash-list" style="margin-top:6px;"></div>
     </section>
 
-    <!-- ── FLUJO 1: RECEPCIÓN (alta atómica) ────────────────────── -->
+    <!-- ── FLUJO 1: RECEPCIÓN CONTRA OC/ALBARÁN ─────────────────── -->
     <section id="view-recepcion" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Recepción de mercancía</h1>
-      <div class="field-label">Nº de albarán (documento de referencia)</div>
-      <input id="rec-ref" class="txt" placeholder="ALB-2026-001" />
-      <div class="field-label">Ubicación destino</div>
-      <select id="rec-loc" class="sel"></select>
-      <div class="field-label">Producto (SKU)</div>
-      <input id="rec-sku-q" class="txt" placeholder="Buscar SKU por nombre o código…" />
-      <div id="rec-sku-res" class="sku-res"></div>
-      <div class="field-label">Referencia de lote (proveedor)</div>
-      <input id="rec-batchref" class="txt" placeholder="L-PROV-778" />
-      <div class="field-label">Fecha de caducidad</div>
-      <input id="rec-exp" class="txt" type="date" />
-      <div class="field-label">Cantidad</div>
-      <div style="display:flex;gap:10px;">
-        <input id="rec-cant" class="num" inputmode="decimal" placeholder="0" />
-        <select id="rec-unidad" class="sel" style="max-width:120px;">
-          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
-          <option value="l">L</option><option value="ml">ml</option>
-        </select>
-      </div>
+      <h1 class="sec-title">Albaranes pendientes</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Selecciona un albarán/OC para recepcionar.</p>
+      <div id="recepcion-list"></div>
+    </section>
+
+    <section id="view-oc" class="view wrap hidden">
+      <button id="oc-back" class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 id="oc-title" class="sec-title">Albarán</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Asocia ubicación y lote, confirma la cantidad recibida SKU por SKU.</p>
+      <div id="oc-grid" style="display:flex;flex-direction:column;gap:14px;"></div>
       <div style="height:14px;"></div>
-      <button id="rec-confirm" class="btn-ok">Registrar recepción</button>
+      <button id="oc-save" class="btn-ok" disabled>Guardar y almacenar</button>
     </section>
 
     <!-- ── FLUJO 2: UBICACIÓN (Traslado Interno) ────────────────── -->

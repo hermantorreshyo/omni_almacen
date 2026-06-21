@@ -384,41 +384,130 @@ const App = (() => {
   /* ════════════════════════════════════════════════════════════════
      FLUJO 1 · RECEPCIÓN CONTRA ALBARÁN
   ════════════════════════════════════════════════════════════════ */
+  /* PASO 1: lista de OC/albaranes pendientes de recepcionar (de [1002]). */
+  const OC_FINAL = ['recibido', 'recibida', 'almacenado', 'almacenada', 'cerrado', 'cerrada', 'anulado', 'anulada'];
   async function openRecepcion() {
     view('view-recepcion');
-    state.ctx = {};
-    el('rec-ref').value = '';
-    el('rec-batchref').value = '';
-    el('rec-exp').value = '';
-    el('rec-cant').value = '';
-    resetSkuSearch('rec-sku-q', 'rec-sku-res');
-    bindNumpad(el('rec-cant'));
-    await ensureCatalogs(['locations']);
-    fillSelect(el('rec-loc'), state.catalogs.locations, lblLoc, 'Ubicación destino…');
+    const list = el('recepcion-list'); list.innerHTML = skeleton();
+    try {
+      const r = await ApiClient.ocPendientes();
+      const rows = rowsOf(r.data).filter((o) => !OC_FINAL.includes(String(ocState(o)).toLowerCase()));
+      list.innerHTML = rows.length ? '' : empty('No hay albaranes pendientes por recepcionar.');
+      rows.forEach((o) => {
+        const c = document.createElement('button'); c.className = 'rowcard';
+        c.innerHTML = `<div><b>${ocRef(o)}</b><small>${o.supplier_name || o.proveedor || ''} · ${ocState(o)}</small></div>
+          <span class="chip">${(o.details || o.lines || []).length || '·'} líneas</span>`;
+        c.addEventListener('click', () => openOC(o));
+        list.appendChild(c);
+      });
+    } catch (e) { logError('recepcion/oc', e); list.innerHTML = empty('No hay albaranes pendientes por recepcionar.'); }
   }
-  async function confirmRecepcion() {
-    const loc   = Number(el('rec-loc').value);
-    const item  = pickedSku('rec-sku-q');
-    const cant  = Number(el('rec-cant').value);
-    const unit  = el('rec-unidad').value;
-    const ref   = el('rec-ref').value.trim();
-    const bref  = el('rec-batchref').value.trim();
-    const exp   = el('rec-exp').value;
-    if (!loc || !item || !cant) { toast('Completa ubicación, SKU y cantidad.', 'warn'); return; }
-    if (!ref)  { toast('Indica el nº de albarán (documento de referencia).', 'warn'); return; }
-    if (!bref) { toast('Indica la referencia de lote del proveedor.', 'warn'); return; }
+  function ocId(o)    { return o.id ?? o.order_id ?? o.purchase_order_id; }
+  function ocRef(o)   { return o.reference ?? o.referencia ?? o.numero_albaran ?? ('OC #' + ocId(o)); }
+  function ocState(o) { return o.status ?? o.estado ?? '—'; }
 
-    const payload = {
-      location_id: loc,
-      item_id: item,
-      item_type: 'sku',
-      batch: { batch_reference: bref, expiration_date: exp || null },
-      quantity: Metrology.toBase(cant, unit),
-      movement_type: 'Compra',
-      reference_document: ref,
+  /* PASO 1b: detalle de la OC — líneas SKU para asociar ubicación + lote + cantidad. */
+  async function openOC(oc) {
+    view('view-oc');
+    el('oc-title').textContent = 'Cargando…';
+    el('oc-grid').innerHTML = skeleton();
+    el('oc-save').disabled = true;
+    await ensureCatalogs(['locations']);
+    let detail = oc;
+    try { const r = await ApiClient.ocDetalle(ocId(oc)); if (r.data) detail = r.data; }
+    catch (e) { logError('oc/detalle', e); }
+    const lines = detail.details || detail.lines || detail.lineas || [];
+    state.ctx = { oc: detail, ref: ocRef(detail), lines: lines.map(normalizeLine) };
+    el('oc-title').textContent = `${ocRef(detail)} · ${state.ctx.lines.length} SKU`;
+    const grid = el('oc-grid'); grid.innerHTML = '';
+    state.ctx.lines.forEach((ln, i) => grid.appendChild(ocLineCard(ln, i)));
+    refreshOcSave();
+  }
+  function normalizeLine(d) {
+    return {
+      detail_id: d.detail_id ?? d.id,
+      item_id: d.item_id ?? d.sku_id,
+      item_type: d.item_type || 'sku',
+      name: d.name ?? d.sku_name ?? d.descripcion ?? d.supplier_item_name ?? ('SKU ' + (d.item_id ?? '')),
+      code: d.sku_final_code ?? d.codigo ?? '',
+      unit: d.unit_of_measure ?? 'ud',
+      requested: Number(d.quantity_requested ?? d.cantidad ?? 0),
+      batch_reference: d.batch_reference ?? d.lote ?? '',
+      expiration_date: d.expiration_date ?? d.fecha_caducidad ?? '',
+      // entradas del usuario:
+      loc: '', recibida: null, confirmed: false,
     };
-    await sendTx('reception', payload, 'Recepción registrada.');
-    renderHub();
+  }
+  function ocLineCard(ln, idx) {
+    const card = document.createElement('div'); card.className = 'oc-card'; card.id = `oc-card-${idx}`;
+    const locOpts = ['<option value="">Ubicación del lote…</option>']
+      .concat(state.catalogs.locations.map((l) => `<option value="${l.id}">${lblLoc(l)}</option>`)).join('');
+    card.innerHTML = `
+      <div class="oc-card-h"><b>${ln.name}</b>${ln.code ? `<small>${ln.code}</small>` : ''}</div>
+      <div class="oc-card-sub">Solicitado: <b>${ln.requested} ${ln.unit}</b></div>
+      <div class="field-label">Ubicación destino del lote</div>
+      <select id="oc-loc-${idx}" class="sel">${locOpts}</select>
+      <div class="oc-row2">
+        <div><div class="field-label">Lote</div><input id="oc-bref-${idx}" class="txt" placeholder="Ref. lote" value="${ln.batch_reference || ''}" /></div>
+        <div><div class="field-label">Caducidad</div><input id="oc-exp-${idx}" class="txt" type="date" value="${ln.expiration_date || ''}" /></div>
+      </div>
+      <div class="field-label">Cantidad recibida (${ln.unit})</div>
+      <div class="oc-row2">
+        <input id="oc-qty-${idx}" class="num" inputmode="decimal" placeholder="0" value="${ln.requested || ''}" />
+        <button id="oc-ok-${idx}" class="btn-ok-sm">Confirmar SKU</button>
+      </div>`;
+    setTimeout(() => {
+      bindNumpad(el(`oc-qty-${idx}`));
+      el(`oc-ok-${idx}`).addEventListener('click', () => confirmLine(idx));
+    }, 0);
+    return card;
+  }
+  function confirmLine(idx) {
+    const ln = state.ctx.lines[idx];
+    const loc = Number(el(`oc-loc-${idx}`).value);
+    const bref = el(`oc-bref-${idx}`).value.trim();
+    const exp = el(`oc-exp-${idx}`).value;
+    const qty = Number(el(`oc-qty-${idx}`).value);
+    if (!loc)  { toast('Asocia una ubicación al lote.', 'warn'); return; }
+    if (!bref) { toast('Indica la referencia de lote.', 'warn'); return; }
+    if (!qty)  { toast('Confirma la cantidad recibida.', 'warn'); return; }
+    ln.loc = loc; ln.batch_reference = bref; ln.expiration_date = exp; ln.recibida = qty; ln.confirmed = true;
+    el(`oc-card-${idx}`).classList.add('oc-done');
+    el(`oc-ok-${idx}`).textContent = '✓ Confirmado';
+    refreshOcSave();
+  }
+  function refreshOcSave() {
+    const all = state.ctx.lines.length > 0 && state.ctx.lines.every((l) => l.confirmed);
+    el('oc-save').disabled = !all;
+  }
+  /* PASO 1c: alta en inventario por SKU + marcar la OC como recibida/almacenada. */
+  async function saveOC() {
+    const { lines, ref } = state.ctx;
+    if (!lines.every((l) => l.confirmed)) { toast('Confirma todas las líneas.', 'warn'); return; }
+    setBusy('oc-save', true);
+    try {
+      for (const ln of lines) {                       // alta de stock por línea (FEFO)
+        await ApiClient.reception({
+          location_id: ln.loc,
+          item_id: ln.item_id,
+          item_type: ln.item_type || 'sku',
+          batch: { batch_reference: ln.batch_reference, expiration_date: ln.expiration_date || null },
+          quantity: ln.recibida,
+          movement_type: 'Compra',
+          reference_document: ref,
+        });
+      }
+      // Marca la OC como recibida/almacenada en compras.
+      await ApiClient.ocRecibir(ocId(state.ctx.oc),
+        lines.filter((l) => l.detail_id != null).map((l) => ({ detail_id: l.detail_id, quantity_received: l.recibida })));
+      toast('Recepción almacenada y stock dado de alta.', 'ok');
+      openRecepcion();
+    } catch (e) {
+      logError('oc/save', e);
+      toast(e.message || 'No se pudo completar la recepción.', 'err');
+    } finally {
+      setBusy('oc-save', false);
+    }
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -971,12 +1060,13 @@ const App = (() => {
   function wireStatic() {
     el('hdr-logout').addEventListener('click', doLogout);
     $$('[data-back]').forEach((b) => b.addEventListener('click', renderHub));
-    el('rec-confirm').addEventListener('click', () => confirmRecepcion().catch(() => {}));
+    el('oc-save').addEventListener('click', () => saveOC().catch(() => {}));
+    el('oc-back').addEventListener('click', () => openRecepcion().catch(() => {}));
     el('ubicar-scan').addEventListener('click', scanUbicacion);
     el('ubicar-confirm').addEventListener('click', () => confirmUbicar().catch(() => {}));
     el('sol-add').addEventListener('click', addSolItem);
     // Buscadores de SKU (typeahead). Ubicar/merma recargan lotes al elegir.
-    wireSkuSearch('rec-sku-q', 'rec-sku-res');
+
     wireSkuSearch('sol-sku-q', 'sol-sku-res', null, { persistent: true });
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
     wireSkuSearch('merma-sku-q', 'merma-sku-res', (s) => batchesForSku(s.id, el('merma-batch')));

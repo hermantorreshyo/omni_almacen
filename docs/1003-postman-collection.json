@@ -359,7 +359,67 @@
       "name": "Recepción",
       "item": [
         {
-          "name": "Recepción (lote inline)",
+          "name": "OC pendientes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=oc_pendientes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "oc_pendientes"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detalle de OC",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=oc_detalle&id=8",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "oc_detalle"
+                },
+                {
+                  "key": "id",
+                  "value": "8"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Alta de stock por línea",
           "request": {
             "method": "POST",
             "header": [
@@ -386,7 +446,44 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"location_id\": 5,\n  \"item_id\": 7,\n  \"item_type\": \"sku\",\n  \"batch\": {\n    \"batch_reference\": \"L-PROV-778\",\n    \"expiration_date\": \"2026-09-15\"\n  },\n  \"quantity\": 25000,\n  \"movement_type\": \"Compra\",\n  \"reference_document\": \"ALB-2026-001\"\n}",
+              "raw": "{\n  \"location_id\": 5,\n  \"item_id\": 7,\n  \"item_type\": \"sku\",\n  \"batch\": {\n    \"batch_reference\": \"L-PROV-778\",\n    \"expiration_date\": \"2026-09-15\"\n  },\n  \"quantity\": 4,\n  \"movement_type\": \"Compra\",\n  \"reference_document\": \"ALB-2026-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Marcar OC recibida/almacenada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=oc_recibir",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "oc_recibir"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 8,\n  \"details\": [\n    {\n      \"detail_id\": 1,\n      \"quantity_received\": 4\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

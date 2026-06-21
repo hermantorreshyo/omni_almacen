@@ -79,7 +79,7 @@ desenvolviendo el sobre. Estructura de ficheros:
 
 | Clave | Pantalla | Endpoint(s) del API CORE |
 |---|---|---|
-| `recepcion` | Recepción de mercancía | `POST /inventory/reception` (lote inline `batch:{batch_reference,expiration_date}`, `movement_type:"Compra"`, `reference_document`) |
+| `recepcion` | Recepción contra OC/albarán de [1002] | `GET /purchasing/orders` (pendientes) → `GET /purchasing/orders/{id}` (líneas) → por SKU `POST /inventory/reception` (lote inline) → `PUT /purchasing/orders/{id}/receive` (estado almacenado) |
 | `ubicar` | Ubicación interna (QR) | `POST /inventory/transfer` (`movement_type:"Traslado Interno"`) |
 | `solicitar` | Solicitar traspaso | `POST /inventory/transfers` (items `{item_id,item_type,quantity_requested}` **sin** batch_id; origen=OBRADOR, destino=interlocutor solicitante) |
 | `picking` | Picking de traspasos | `PUT /inventory/transfers/{id}/picking` · `/dispatch` |

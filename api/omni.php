@@ -59,6 +59,9 @@ $UP = [
     'stock'                => '/inventory/stock',
     'batches'              => '/inventory/batches',      // GET lotes activos (FEFO)
     'reception'            => '/inventory/reception',    // POST atómico (movement_type:"Compra")
+    'oc_list'              => '/purchasing/orders',       // GET listar OC
+    'oc_detail'            => '/purchasing/orders/%d',     // GET detalle con líneas
+    'oc_receive'           => '/purchasing/orders/%d/receive', // PUT marcar recibida/almacenada
     'transfer'             => '/inventory/transfer',     // POST atómico (Traslado Interno/Externo)
     'scrap'                => '/inventory/scrap',         // POST merma con evidencia
     /* Workflow de traspaso externo — PENDIENTE de publicación en API CORE
@@ -264,19 +267,30 @@ switch ($action) {
         relay(client()->request('GET', $UP['batches'] . ($qs ? '?' . http_build_query($qs) : ''), null, true));
     }
 
-    /* ── FLUJO 1: RECEPCIÓN (atómica) ───────────────────────────────────── */
-    /* El API v6 no expone lista de albaranes pendientes: la recepción es un
-       alta atómica de stock (POST /inventory/reception, movement_type Compra). */
-    case 'albaranes_pendientes': {
+    /* ── FLUJO 1: RECEPCIÓN CONTRA OC/ALBARÁN (de [1002]) ───────────────── */
+    case 'oc_pendientes': {
         requireAuth();
-        out(['ok' => true, 'data' => [], 'note' => 'El API v6 no lista albaranes; la recepción es atómica.']);
+        $qs = $_GET; unset($qs['action']);
+        relay(client()->request('GET', $UP['oc_list'] . ($qs ? '?' . http_build_query($qs) : ''), null, true));
     }
-    case 'albaran_recibir':
+    case 'oc_detalle': {
+        requireAuth();
+        $id = (int) ($_GET['id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'id de OC inválido.', 422);
+        relay(client()->request('GET', sprintf($UP['oc_detail'], $id), null, true));
+    }
     case 'reception': {
         requireAuth();
         $in = bodyJson();
         $in['movement_type'] = $in['movement_type'] ?? 'Compra';
         relay(client()->request('POST', $UP['reception'], json_encode($in, JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'oc_recibir': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'id de OC inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['oc_receive'], $id),
+            json_encode(['details' => $in['details'] ?? []], JSON_UNESCAPED_UNICODE), true));
     }
 
     /* ── FLUJO 2: UBICACIÓN = Traslado Interno atómico ──────────────────── */

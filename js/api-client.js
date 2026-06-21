@@ -99,8 +99,10 @@ const ApiClient = (() => {
     batches: (params = {})           => _request('batches', { query: params }),
 
     /* ── Flujo 1: Recepción ── */
-    albaranesPendientes: ()        => _request('albaranes_pendientes'),
-    albaranRecibir:      (payload) => _request('albaran_recibir', { method: 'POST', body: payload }),
+    ocPendientes: (params = {}) => _request('oc_pendientes', { query: params }),
+    ocDetalle:    (id)          => _request('oc_detalle', { query: { id } }),
+    reception:    (payload)     => _request('reception', { method: 'POST', body: payload }),
+    ocRecibir:    (id, details) => _request('oc_recibir', { method: 'POST', body: { id, details } }),
 
     /* ── Flujo 2: Ubicación QR ── */
     ubicar: (payload) => _request('ubicar', { method: 'POST', body: payload }),

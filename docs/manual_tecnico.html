@@ -109,6 +109,8 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
       <tr><td>login / session / logout</td><td>POST/GET</td><td>/auth/login · /auth/me</td></tr>
       <tr><td>set_interlocutor</td><td>POST</td><td>(sesión) fija X-Interlocutor-Id de trabajo</td></tr>
       <tr><td>catalog (resource=skus|locations|interlocutors|employees|rutas)</td><td>GET</td><td>/catalog/* · rutas→/logistics/routes</td></tr>
+      <tr><td>oc_pendientes / oc_detalle / oc_recibir</td><td>GET/PUT</td><td>/purchasing/orders · /{id} · /{id}/receive</td></tr>
+      <tr><td>reception</td><td>POST</td><td>/inventory/reception</td></tr>
       <tr><td>stock</td><td>GET</td><td>/inventory/stock</td></tr>
       <tr><td>batches (item_id=)</td><td>GET</td><td>/inventory/batches</td></tr>
       <tr><td>reception</td><td>POST</td><td>/inventory/reception</td></tr>
@@ -172,6 +174,8 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
     <p>Los selectores operativos solo muestran SKUs con <code>status: "active"</code> (filtro <code>?status=active</code> + verificación en cliente). El <b>Panel de traspasos</b> es un informe histórico y muestra la información sin importar el estado del SKU.</p>
     <h3>Búsqueda de SKU (typeahead)</h3>
     <p>Con el catálogo estandarizado (~1000 SKUs) los selectores de SKU se sustituyen por un buscador con debounce que consulta <code>GET /catalog/skus?q=&status=active&limit=30</code>. Aplica a recepción, ubicación, merma y solicitud.</p>
+    <h3>Recepción contra OC/albarán de [1002]</h3>
+    <p>La pantalla <code>recepcion</code> lista las OC pendientes (<code>GET /purchasing/orders</code>, se filtran las ya recibidas/almacenadas). Al elegir una se carga su detalle (<code>GET /purchasing/orders/{id}</code>) y por cada línea SKU el operario asocia ubicación, lote (ref + caducidad) y cantidad recibida. Al guardar: por línea <code>POST /inventory/reception</code> (alta de stock con lote inline) y luego <code>PUT /purchasing/orders/{id}/receive</code> con <span class="mono">{details:[{detail_id, quantity_received}]}</span> para dejar la OC en estado recibido/almacenado.</p>
     <h3>Solicitud de traspaso sin lote</h3>
     <p>Al crear la solicitud (<code>POST /inventory/transfers</code>) los ítems se envían como <span class="mono">{item_id, item_type, quantity_requested}</span> <b>sin</b> <code>batch_id</code>: el lote se asigna por FEFO en el picking/despacho. El <b>origen</b> se resuelve al interlocutor OBRADOR (<code>/catalog/interlocutors?type=fabrica</code>) y el <b>destino</b> al interlocutor de trabajo; ambos se mapean a su <code>location_id</code> vía <code>/catalog/locations</code> (campo <code>interlocutor_id</code>) y se muestran como solo lectura. El buscador de SKU es persistente: muestra el listado y lo filtra con <code>?q=</code>.</p>
     <h3>Listas de traspaso vacías</h3>
