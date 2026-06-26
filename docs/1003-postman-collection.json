@@ -15,7 +15,7 @@
       "name": "Sesión",
       "item": [
         {
-          "name": "Login",
+          "name": "Login fase 1 (credenciales)",
           "request": {
             "method": "POST",
             "header": [
@@ -42,7 +42,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usuario\": \"herman.torres\",\n  \"password\": \"herman.torres\",\n  \"interlocutor_id\": 1\n}",
+              "raw": "{\n  \"usuario\": \"herman.torres\",\n  \"password\": \"herman.torres\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -52,7 +52,7 @@
           }
         },
         {
-          "name": "Fijar interlocutor",
+          "name": "Login fase 2 (sede → rol correcto)",
           "request": {
             "method": "POST",
             "header": [
@@ -62,7 +62,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/omni.php?action=set_interlocutor",
+              "raw": "{{base_url}}/api/omni.php?action=login_sede",
               "host": [
                 "{{base_url}}"
               ],
@@ -73,13 +73,13 @@
               "query": [
                 {
                   "key": "action",
-                  "value": "set_interlocutor"
+                  "value": "login_sede"
                 }
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"interlocutor_id\": 7\n}",
+              "raw": "{\n  \"usuario\": \"herman.torres\",\n  \"password\": \"herman.torres\",\n  \"interlocutor_id\": 7\n}",
               "options": {
                 "raw": {
                   "language": "json"

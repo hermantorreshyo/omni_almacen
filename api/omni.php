@@ -170,6 +170,9 @@ $action = $_GET['action'] ?? '';
 switch ($action) {
 
     /* ── AUTENTICACIÓN ──────────────────────────────────────────────────── */
+    /* FASE 1: valida credenciales (interlocutor provisional) y lista sedes.
+       El rol definitivo del JWT se obtiene en la FASE 2 al re-autenticar con
+       la sede elegida (API CORE v6.8 fija el rol según el interlocutor_id). */
     case 'login': {
         $in  = bodyJson();
         $c   = client();
@@ -180,52 +183,65 @@ switch ($action) {
         ]);
         if (!$res['ok']) fail('ERR_LOGIN', $res['error'] ?? 'Credenciales inválidas.', 401);
 
-        // El sobre ya viene desenvuelto: $res['data'] es el payload interno.
         $token = $res['data']['token'] ?? $res['data']['access_token'] ?? null;
         if (!$token) fail('ERR_LOGIN', 'El API no devolvió token.', 502);
-
         $_SESSION['omni_token'] = $token;
         $c->setToken($token);
 
-        // Datos de usuario: del propio login o, si no, de /auth/me.
         $user = $res['data']['user'] ?? $res['data'] ?? [];
-        if (empty($user['rol']) && empty($user['role'])) {
-            $me = $c->me();
-            if ($me['ok'] && is_array($me['data'])) $user = $me['data'];
-        }
         $_SESSION['omni_user'] = $user;
-        // Interlocutor provisional (para poder listar). El definitivo lo elige el usuario.
         $_SESSION['omni_interlocutor'] = $user['interlocutor_id'] ?? ($in['interlocutor_id'] ?? 1);
-        unset($_SESSION['omni_interlocutor_set']);
+        unset($_SESSION['omni_committed']);                  // aún no confirmada la sede
 
-        // Interlocutores disponibles para que el usuario elija su tienda/bodega.
         $intc = $c->request('GET', $UP['catalog_interlocutors'], null, true);
         $interlocutors = $intc['ok'] ? (is_array($intc['data']) ? $intc['data'] : []) : [];
 
         out(['ok' => true, 'data' => [
-            'user'           => $user,
-            'rol'            => $user['rol'] ?? $user['role'] ?? null,
-            'interlocutors'  => $interlocutors,
+            'user'          => $user,
+            'interlocutors' => $interlocutors,
             'needs_interlocutor' => true,
         ]]);
     }
 
-    case 'set_interlocutor': {
-        requireAuth();
-        $id = (int) (bodyJson()['interlocutor_id'] ?? 0);
+    /* FASE 2: re-autentica con la sede elegida → JWT con el rol de ESA sede. */
+    case 'login_sede': {
+        $in  = bodyJson();
+        $id  = (int) ($in['interlocutor_id'] ?? 0);
         if ($id <= 0) fail('ERR_PARAM', 'interlocutor_id inválido.', 422);
-        $_SESSION['omni_interlocutor']     = $id;
-        $_SESSION['omni_interlocutor_set'] = true;
-        out(['ok' => true, 'data' => ['interlocutor_id' => $id]]);
+        $c   = client();
+        $res = $c->login([
+            'usuario'         => $in['usuario'] ?? $in['username'] ?? '',
+            'password'        => $in['password'] ?? '',
+            'interlocutor_id' => $id,
+        ]);
+        if (!$res['ok']) fail('ERR_LOGIN', $res['error'] ?? 'Credenciales inválidas.', 401);
+
+        $token = $res['data']['token'] ?? $res['data']['access_token'] ?? null;
+        if (!$token) fail('ERR_LOGIN', 'El API no devolvió token.', 502);
+        $_SESSION['omni_token'] = $token;
+        $c->setToken($token);
+
+        $user = $res['data']['user'] ?? $res['data'] ?? [];
+        $_SESSION['omni_user']         = $user;
+        $_SESSION['omni_interlocutor'] = $id;
+        $_SESSION['omni_committed']    = true;
+
+        out(['ok' => true, 'data' => [
+            'user'            => $user,
+            'rol'             => $user['rol'] ?? $user['role'] ?? null,
+            'interlocutor_id' => $id,
+            'interlocutor_name' => $user['interlocutor_name'] ?? null,
+        ]]);
     }
 
     case 'session': {
-        if (empty($_SESSION['omni_user'])) out(['ok' => false, 'data' => null]);
+        if (empty($_SESSION['omni_user']) || empty($_SESSION['omni_committed'])) out(['ok' => false, 'data' => null]);
         out(['ok' => true, 'data' => [
             'user'            => $_SESSION['omni_user'],
             'rol'             => $_SESSION['omni_user']['rol'] ?? $_SESSION['omni_user']['role'] ?? null,
             'interlocutor_id' => $_SESSION['omni_interlocutor'] ?? null,
-            'interlocutor_set'=> !empty($_SESSION['omni_interlocutor_set']),
+            'interlocutor_name' => $_SESSION['omni_user']['interlocutor_name'] ?? null,
+            'interlocutor_set'=> true,
         ]]);
     }
 

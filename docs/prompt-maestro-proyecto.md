@@ -64,11 +64,19 @@ desenvolviendo el sobre. Estructura de ficheros:
 
 ## AUTENTICACIÓN (LOGIN EN 2 FASES + INTERLOCUTOR)
 
-1. **Credenciales** → `POST /auth/login` con `{username, password, interlocutor_id}`.
-   Respuesta: `{token, role, interlocutor_id, interlocutor_name, permissions}`.
-2. **Selección de tienda/bodega**: el proxy lista `/catalog/interlocutors`; el
-   usuario elige y `action=set_interlocutor` fija el `X-Interlocutor-Id` de la sesión.
-3. **Pantallas**: `GET /rbac/subsystems/1003/my-screens` → `'*'` (SuperAdmin) o lista.
+1. **Credenciales** (no se envían aún): el usuario las introduce.
+2. **Selección de tienda/bodega**: tras una validación inicial se listan los
+   interlocutores; el usuario elige su sede.
+3. **Login real con la sede** → `POST /auth/login` con `{username, password,
+   interlocutor_id}`. **API CORE v6.8 fija el rol del JWT según ese
+   `interlocutor_id`**, por lo que la sede debe enviarse en el login (no por
+   header posterior). Respuesta: `{token, role, interlocutor_id, interlocutor_name, permissions}`.
+4. **Pantallas**: `GET /rbac/subsystems/1003/my-screens` → `'*'` (SuperAdmin) o lista.
+
+> Implementación: el proxy hace una validación provisional para listar sedes
+> (`action=login`) y **re-autentica** con la sede elegida (`action=login_sede`),
+> de modo que el JWT persistido lleva el rol de esa sede. Un cambio de sede exige
+> logout + login.
 
 > SuperAdmin (detección robusta: el rol contiene `superadmin`, admite
 > `SuperAdministrador`) ve **todas** las pantallas y el **Gestor de Permisos**.

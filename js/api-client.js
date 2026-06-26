@@ -94,7 +94,8 @@ const ApiClient = (() => {
 
     /* ── Catálogo ── */
     catalog: (resource, params = {}) => _request('catalog', { query: { resource, ...params } }),
-    setInterlocutor: (id) => _request('set_interlocutor', { method: 'POST', body: { interlocutor_id: id } }),
+    loginSede: (usuario, password, interlocutor_id) =>
+      _request('login_sede', { method: 'POST', body: { usuario, password, interlocutor_id } }),
     stock:   (params = {})           => _request('stock',   { query: params }),
     batches: (params = {})           => _request('batches', { query: params }),
 

@@ -94,12 +94,11 @@ const App = (() => {
 
     try {
       const s = await ApiClient.session();
-      if (s.ok && s.data) {
+      if (s.ok && s.data) {                       // sesión ya confirmada con sede (rol correcto)
         setIdentity(s.data);
-        if (s.data.interlocutor_set) { await finishAuth(); return; }
-        // Sesión viva pero sin tienda elegida: re-listar y pedir selección.
-        const il = await ApiClient.catalog('interlocutors').catch(() => ({ data: [] }));
-        promptInterlocutor(rowsOf(il.data)); return;
+        state.interlocutor = s.data.interlocutor_id ?? null;
+        state.interlocutorName = s.data.interlocutor_name ?? null;
+        await finishAuth(); return;
       }
     } catch (e) { logError('boot/session', e); }
     view('view-login');
@@ -121,6 +120,7 @@ const App = (() => {
     try {
       const r = await ApiClient.login(usuario, password);
       setIdentity(r.data);
+      state._creds = { usuario, password };          // se usan en la fase 2 (re-login por sede)
       promptInterlocutor(rowsOf(r.data.interlocutors));
     } catch (e) {
       logError('login', e);
@@ -163,15 +163,20 @@ const App = (() => {
     const sel = el('intc-select');
     const id = Number(sel.value);
     if (!id) { toast('Selecciona dónde estás trabajando.', 'warn'); return; }
+    if (!state._creds) { toast('Vuelve a iniciar sesión.', 'warn'); view('view-login'); return; }
     setBusy('intc-confirm', true);
     try {
-      await ApiClient.setInterlocutor(id);
+      // Re-login con la sede elegida → JWT con el rol de ESA sede (API CORE v6.8).
+      const r = await ApiClient.loginSede(state._creds.usuario, state._creds.password, id);
+      setIdentity(r.data);
       state.interlocutor = id;
-      state.interlocutorName = sel.selectedOptions[0] ? sel.selectedOptions[0].text : null;
+      state.interlocutorName = (r.data && r.data.interlocutor_name)
+        || (sel.selectedOptions[0] ? sel.selectedOptions[0].text : null);
+      state._creds = null;                            // ya no se necesitan
       await finishAuth();
     } catch (e) {
-      logError('set_interlocutor', e);
-      toast(e.message || 'No se pudo fijar la tienda.', 'err');
+      logError('login_sede', e);
+      toast(e.message || 'No se pudo entrar a esa sede.', 'err');
     } finally {
       setBusy('intc-confirm', false);
     }
