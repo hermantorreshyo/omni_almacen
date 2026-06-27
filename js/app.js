@@ -195,9 +195,16 @@ const App = (() => {
   async function loadScreens() {
     try {
       const r = await ApiClient.misPantallas();
-      state.screens = r?.data?.screens ?? null;   // '*' | array | null
+      const d = r?.data ?? null;
+      // Acepta: {screens:'*'} | {screens:[...]} | '*' | [...] | {data:{screens:...}}
+      let scr = (d && typeof d === 'object' && !Array.isArray(d))
+        ? (d.screens ?? d.data?.screens ?? null)
+        : d;
+      if (scr === '*') state.screens = '*';                 // ── SuperAdmin: acceso total
+      else if (Array.isArray(scr)) state.screens = scr;     // ── pantallas asignadas
+      else state.screens = null;                            // ── desconocido → fallback local
     } catch (_) {
-      state.screens = null;                        // fallback a defaults locales
+      state.screens = null;
     }
   }
 
@@ -226,9 +233,10 @@ const App = (() => {
     recibir:    { t: 'Recepción de Traspaso',    d: 'Verificar y cerrar entrega',     area: 'tienda',     go: openRecibir },
     merma:      { t: 'Registrar Merma',          d: 'Baja con evidencia fotográfica', area: 'mermas',     go: openMerma },
     dashboard:  { t: 'Panel de Traspasos',       d: 'Estado, KPIs e histórico',       area: 'gestion',    go: openDashboard },
+    gestor_permisos: { t: 'Gestor de Permisos',  d: 'Asignar pantallas a roles',      area: 'gestion',    go: openPermisos },
   };
   // Orden de aparición en el home (agrupado por área/rol).
-  const TILE_ORDER = ['recepcion', 'ubicar', 'picking', 'transporte', 'solicitar', 'recibir', 'merma', 'dashboard'];
+  const TILE_ORDER = ['recepcion', 'ubicar', 'picking', 'transporte', 'solicitar', 'recibir', 'merma', 'dashboard', 'gestor_permisos'];
   /* Detección robusta de SuperAdmin (rol puede venir como 'SuperAdministrador'). */
   function isSuperAdmin() {
     const r = (state.rol || '').toString().toLowerCase().replace(/[\s_-]/g, '');
@@ -237,9 +245,10 @@ const App = (() => {
   /* Calcula las pantallas operativas visibles para el usuario actual. */
   function visibleTiles() {
     const all = Object.keys(TILE_META);
-    if (isSuperAdmin() || state.screens === '*') return all;     // SuperAdmin ve todo
-    if (Array.isArray(state.screens)) return state.screens.filter((k) => TILE_META[k]);
-    return ROLE_TILES[state.rol] || [];                                     // fallback local
+    if (Array.isArray(state.screens)) return state.screens.filter((k) => TILE_META[k]); // el API manda
+    if (state.screens === '*') return all;                       // compatibilidad
+    if (isSuperAdmin()) return all;                              // API no respondió → red de seguridad
+    return ROLE_TILES[state.rol] || [];                          // fallback local
   }
 
   function orderTiles(keys) {
@@ -263,24 +272,16 @@ const App = (() => {
       legend.innerHTML = areasShown.map((a) =>
         `<span><i style="background:${AREA[a].color}"></i>${AREA[a].label}</span>`).join('');
     }
+    // Las pantallas (incluida gestor_permisos para SuperAdmin) llegan en el array.
     tiles.forEach((key) => {
       const m = TILE_META[key];
       const b = document.createElement('button');
-      b.className = 'tile';
-      b.style.borderLeftColor = AREA[m.area].color;       // color por rol/área
+      b.className = 'tile' + (key === 'gestor_permisos' ? ' tile-admin' : '');
+      b.style.borderLeftColor = AREA[m.area].color;
       b.innerHTML = `<span class="tile-t">${m.t}</span><span class="tile-d">${m.d}</span>`;
       b.addEventListener('click', m.go);
       wrap.appendChild(b);
     });
-    // Tile exclusivo de administración (solo SuperAdmin)
-    if (isSuperAdmin()) {
-      const b = document.createElement('button');
-      b.className = 'tile tile-admin';
-      b.innerHTML = `<span class="tile-t">Gestor de Permisos</span>
-        <span class="tile-d">Asignar pantallas a roles del API CORE</span>`;
-      b.addEventListener('click', openPermisos);
-      wrap.appendChild(b);
-    }
     view('view-hub');
   }
 
@@ -327,11 +328,11 @@ const App = (() => {
       return;
     }
 
-    // Pantallas a gestionar: catálogo registrado en el API CORE (SSOT) que [1003]
-    // sabe renderizar. Si el catálogo no responde, se usan las locales.
-    const screens = (registered && registered.length)
+    // Pantallas a gestionar: catálogo registrado (SSOT) que [1003] renderiza,
+    // excluyendo la propia pantalla de administración (gestor_permisos).
+    const screens = ((registered && registered.length)
       ? registered.filter((k) => TILE_META[k])
-      : Object.keys(TILE_META);
+      : Object.keys(TILE_META)).filter((k) => k !== 'gestor_permisos');
 
     // Estado editable en memoria: { group: Set(roles) }
     const draft = {};

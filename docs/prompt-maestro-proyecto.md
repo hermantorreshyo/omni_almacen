@@ -71,7 +71,9 @@ desenvolviendo el sobre. Estructura de ficheros:
    interlocutor_id}`. **API CORE v6.8 fija el rol del JWT según ese
    `interlocutor_id`**, por lo que la sede debe enviarse en el login (no por
    header posterior). Respuesta: `{token, role, interlocutor_id, interlocutor_name, permissions}`.
-4. **Pantallas**: `GET /rbac/subsystems/1003/my-screens` → `'*'` (SuperAdmin) o lista.
+4. **Pantallas**: `GET /rbac/subsystems/1003/my-screens` devuelve **siempre un
+   array** de claves (v6.8): el SuperAdmin recibe todas + `gestor_permisos`; el
+   resto, las asignadas; vacío si ninguna. El subsistema solo itera el array.
 
 > Implementación: el proxy hace una validación provisional para listar sedes
 > (`action=login`) y **re-autentica** con la sede elegida (`action=login_sede`),
@@ -95,6 +97,7 @@ desenvolviendo el sobre. Estructura de ficheros:
 | `recibir` | Recepción de traspaso | `PUT /inventory/transfers/{id}/close` |
 | `merma` | Registro de merma | `POST /inventory/scrap` (`reason`, `file_data` opcional) |
 | `dashboard` | Panel de traspasos (KPIs) | `GET /inventory/transfers` (informe; ignora estado del SKU) |
+| `gestor_permisos` | Gestor de permisos (SuperAdmin) | `GET /rbac/roles`, `GET/PUT /rbac/subsystems/1003/screen-permissions`, `GET /rbac/subsystems/1003/screens` |
 
 **Workflow de traspaso:** `SOLICITADO → EN_PICKING → LISTO_DESPACHO → EN_RUTA →
 PENDIENTE_RECEPCION → CERRADO`. Stock: descuenta origen en `/route`, incrementa
