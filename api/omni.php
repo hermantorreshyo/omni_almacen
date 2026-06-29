@@ -110,6 +110,12 @@ function bodyJson(): array
 }
 
 /* ── Cliente con contexto de sesión ─────────────────────────────────────── */
+function sanitizeUser($user): array
+{
+    if (!is_array($user)) return [];
+    unset($user['token'], $user['access_token'], $user['jwt'], $user['password']);
+    return $user;
+}
 function client(): OmniCoreClient
 {
     global $API_HOST, $API_PREFIX;
@@ -189,7 +195,7 @@ switch ($action) {
         $c->setToken($token);
 
         $user = $res['data']['user'] ?? $res['data'] ?? [];
-        $_SESSION['omni_user'] = $user;
+        $_SESSION['omni_user'] = sanitizeUser($user);
         $_SESSION['omni_interlocutor'] = $user['interlocutor_id'] ?? ($in['interlocutor_id'] ?? 1);
         unset($_SESSION['omni_committed']);                  // aún no confirmada la sede
 
@@ -197,7 +203,7 @@ switch ($action) {
         $interlocutors = $intc['ok'] ? (is_array($intc['data']) ? $intc['data'] : []) : [];
 
         out(['ok' => true, 'data' => [
-            'user'          => $user,
+            'user'          => sanitizeUser($user),
             'interlocutors' => $interlocutors,
             'needs_interlocutor' => true,
         ]]);
@@ -222,12 +228,12 @@ switch ($action) {
         $c->setToken($token);
 
         $user = $res['data']['user'] ?? $res['data'] ?? [];
-        $_SESSION['omni_user']         = $user;
+        $_SESSION['omni_user'] = sanitizeUser($user);
         $_SESSION['omni_interlocutor'] = $id;
         $_SESSION['omni_committed']    = true;
 
         out(['ok' => true, 'data' => [
-            'user'            => $user,
+            'user'            => sanitizeUser($user),
             'rol'             => $user['rol'] ?? $user['role'] ?? null,
             'interlocutor_id' => $id,
             'interlocutor_name' => $user['interlocutor_name'] ?? null,

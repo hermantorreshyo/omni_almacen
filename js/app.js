@@ -237,10 +237,15 @@ const App = (() => {
   };
   // Orden de aparición en el home (agrupado por área/rol).
   const TILE_ORDER = ['recepcion', 'ubicar', 'picking', 'transporte', 'solicitar', 'recibir', 'merma', 'dashboard', 'gestor_permisos'];
-  /* Detección robusta de SuperAdmin (rol puede venir como 'SuperAdministrador'). */
+  /* Detección robusta de SuperAdmin: por rol, por usuario o por id global (=1).
+     Resiliente a JWT sin rol (login en sede sin rol asignado). */
   function isSuperAdmin() {
-    const r = (state.rol || '').toString().toLowerCase().replace(/[\s_-]/g, '');
-    return r.includes('superadmin');
+    const norm = (v) => (v || '').toString().toLowerCase().replace(/[\s_-]/g, '');
+    const r = norm(state.rol);
+    const u = norm(state.user && (state.user.username || state.user.usuario || state.user.nombre));
+    if (r.includes('superadmin') || u.includes('superadmin')) return true;
+    const id = state.user && (state.user.user_id ?? state.user.id);
+    return Number(id) === 1 || !!(state.user && state.user.is_superadmin);
   }
   /* Calcula las pantallas operativas visibles para el usuario actual. */
   function visibleTiles() {
@@ -589,7 +594,9 @@ const App = (() => {
       obrador = fabricas.find((i) => /obrador/i.test(intName(i))) || fabricas[0] || null;
     } catch (e) { logError('sol/obrador', e); }
     const locs = state.catalogs.locations;
-    const oLoc = obrador ? locs.find((l) => Number(l.interlocutor_id) === Number(obrador.id)) : null;
+    const obradorLocs = obrador ? locs.filter((l) => Number(l.interlocutor_id) === Number(obrador.id)) : [];
+    // Preferir la ubicación de tipo "bodega" del OBRADOR (recomendación API CORE).
+    const oLoc = obradorLocs.find((l) => String(l.area_type || '').toLowerCase() === 'bodega') || obradorLocs[0] || null;
     const dLoc = locs.find((l) => Number(l.interlocutor_id) === Number(state.interlocutor));
     state.ctx.originLocId = oLoc ? oLoc.id : null;
     state.ctx.destLocId   = dLoc ? dLoc.id : null;
@@ -608,18 +615,38 @@ const App = (() => {
       wrap.appendChild(r);
     });
   }
-  function addSolItem() {
+  async function addSolItem() {
     const item  = pickedSku('sol-sku-q');
     const cant  = Number(el('sol-cant').value);
     const unit  = el('sol-unidad').value;
     if (!item || !cant) { toast('Elige un SKU del listado e indica la cantidad.', 'warn'); return; }
+    const label = el('sol-sku-res').querySelector('.sku-opt.sel')?.textContent || ('SKU ' + item);
+    const qtyBase = Metrology.toBase(cant, unit);
+    // El API exige batch_id; lo resolvemos por FEFO con stock real en el origen
+    // (filtro location_id, soportado por el API CORE). El usuario no elige lote.
+    let lot = null;
+    setBusy('sol-add', true);
+    try {
+      const params = { item_id: item };
+      if (state.ctx.originLocId) params.location_id = state.ctx.originLocId;
+      const r = await ApiClient.batches(params);
+      const lots = rowsOf(r.data).slice().sort((a, b) =>
+        String(a.expiration_date || a.fecha_caducidad || '').localeCompare(String(b.expiration_date || b.fecha_caducidad || '')));
+      lot = lots[0] || null;
+    } catch (e) { logError('sol/fefo', e); }
+    finally { setBusy('sol-add', false); }
+    if (!lot) { toast('Ese SKU no tiene lotes con stock en bodega.', 'warn'); return; }
+    // Si el API devolvió quantity_available, avisar si el lote FEFO no cubre lo pedido.
+    const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
+    if (avail != null && avail < qtyBase) {
+      toast(`Lote FEFO con stock insuficiente (${avail} disp.). Se solicitará igualmente.`, 'warn');
+    }
     state.ctx.items.push({
       item_id: item,
-      quantity_requested: Metrology.toBase(cant, unit),
+      batch_id: lot.id,
+      quantity_requested: qtyBase,
       unit,
-      sku_label: el('sol-sku-q').dataset.skuId
-        ? (el('sol-sku-res').querySelector('.sku-opt.sel')?.textContent || ('SKU ' + item))
-        : ('SKU ' + item),
+      sku_label: label,
     });
     el('sol-cant').value = '';
     resetSkuSearch('sol-sku-q', 'sol-sku-res');
@@ -634,8 +661,8 @@ const App = (() => {
       location_id_origin: state.ctx.originLocId,
       location_id_destination: state.ctx.destLocId,
       items: state.ctx.items.map((it) => ({
-        item_id: it.item_id, item_type: 'sku', quantity_requested: it.quantity_requested,
-      })),   // el lote NO se solicita: se asigna por FEFO en el picking
+        item_id: it.item_id, item_type: 'sku', batch_id: it.batch_id, quantity_requested: it.quantity_requested,
+      })),   // batch_id resuelto por FEFO al añadir el ítem (el usuario no elige lote)
       notes: el('sol-notes').value.trim(),
     };
     await sendTx('traspaso_solicitar', payload, 'Solicitud registrada (SOLICITADO).');
@@ -1070,7 +1097,7 @@ const App = (() => {
     el('oc-back').addEventListener('click', () => openRecepcion().catch(() => {}));
     el('ubicar-scan').addEventListener('click', scanUbicacion);
     el('ubicar-confirm').addEventListener('click', () => confirmUbicar().catch(() => {}));
-    el('sol-add').addEventListener('click', addSolItem);
+    el('sol-add').addEventListener('click', () => addSolItem().catch(() => {}));
     // Buscadores de SKU (typeahead). Ubicar/merma recargan lotes al elegir.
 
     wireSkuSearch('sol-sku-q', 'sol-sku-res', null, { persistent: true });

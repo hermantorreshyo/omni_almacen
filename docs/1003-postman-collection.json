@@ -567,7 +567,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 10,\n  \"items\": [\n    {\n      \"item_id\": 5,\n      \"item_type\": \"sku\",\n      \"quantity_requested\": 2000\n    }\n  ],\n  \"notes\": \"Reposición tienda centro\"\n}",
+              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 10,\n  \"items\": [\n    {\n      \"item_id\": 5,\n      \"item_type\": \"sku\",\n      \"batch_id\": 1,\n      \"quantity_requested\": 2000\n    }\n  ],\n  \"notes\": \"Reposición tienda centro (batch_id por FEFO)\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

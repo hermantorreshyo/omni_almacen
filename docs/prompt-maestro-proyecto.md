@@ -91,7 +91,7 @@ desenvolviendo el sobre. Estructura de ficheros:
 |---|---|---|
 | `recepcion` | Recepción contra OC/albarán de [1002] | `GET /purchasing/orders` (pendientes) → `GET /purchasing/orders/{id}` (líneas) → por SKU `POST /inventory/reception` (lote inline) → `PUT /purchasing/orders/{id}/receive` (estado almacenado) |
 | `ubicar` | Ubicación interna (QR) | `POST /inventory/transfer` (`movement_type:"Traslado Interno"`) |
-| `solicitar` | Solicitar traspaso | `POST /inventory/transfers` (items `{item_id,item_type,quantity_requested}` **sin** batch_id; origen=OBRADOR, destino=interlocutor solicitante) |
+| `solicitar` | Solicitar traspaso | `POST /inventory/transfers` (items `{item_id,item_type,batch_id,quantity_requested}`; el API exige `batch_id`, que el cliente resuelve por **FEFO** vía `/inventory/batches?item_id=&location_id={origen}` (stock real en bodega del OBRADOR) sin pedir el lote al usuario; origen=OBRADOR, destino=interlocutor solicitante) |
 | `picking` | Picking de traspasos | `PUT /inventory/transfers/{id}/picking` · `/dispatch` |
 | `transporte` | Ruta de transporte | `PUT /inventory/transfers/{id}/route` · `/deliver` |
 | `recibir` | Recepción de traspaso | `PUT /inventory/transfers/{id}/close` |
