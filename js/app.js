@@ -879,8 +879,18 @@ const App = (() => {
   // D) Transportista: pedidos listos para transportar / en ruta (origen = mi sede).
   async function openTransporte() {
     view('view-transporte');
-    await ensureCatalogs(['rutas', 'locations', 'interlocutors']);
+    await ensureCatalogs(['locations', 'interlocutors']);
     const list = el('transporte-list'); list.innerHTML = skeleton();
+    // Rutas activas: aceptan traspasos en estado despachado y en_transito.
+    try {
+      const [rd, rt] = await Promise.all([
+        ApiClient.rutasActivas('despachado').catch(() => ({ data: [] })),
+        ApiClient.rutasActivas('en_transito').catch(() => ({ data: [] })),
+      ]);
+      const seenR = new Set();
+      state.rutas = [...rowsOf(rd.data), ...rowsOf(rt.data)]
+        .filter((r) => { if (seenR.has(r.id)) return false; seenR.add(r.id); return true; });
+    } catch (e) { logError('transporte/rutas', e); state.rutas = []; }
     try {
       const [listo, enruta] = await Promise.all([
         ApiClient.traspasos('LISTO_DESPACHO').catch(() => ({ data: [] })),
@@ -895,13 +905,17 @@ const App = (() => {
       rows.forEach((t) => list.appendChild(transporteCard(t)));
     } catch (e) { logError('transporte/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
   }
+  function rutaLabel(r) {
+    const base = r.route_code || ('Ruta ' + r.id);
+    const extra = [r.plate_number, r.driver_name].filter(Boolean).join(' · ');
+    return extra ? `${base} — ${extra}` : base;
+  }
   function transporteCard(t) {
     const id = tId(t); const st = tState(t);
     const c = document.createElement('div'); c.className = 'rowcard col';
     c.innerHTML = `<div class="rowcard-top"><b>Traspaso #${id}</b>
       <span class="chip ${st === 'EN_RUTA' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ')}</span></div>
       <small class="tp-sub">Entregar a: ${intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small>`;
-    // Detalle expandible: qué se entrega (cantidades despachadas)
     const det = document.createElement('div'); det.className = 'dash-det hidden';
     const seeBtn = document.createElement('button'); seeBtn.className = 'btn-ghost btn-see'; seeBtn.textContent = 'Ver qué entrego';
     seeBtn.addEventListener('click', async () => {
@@ -915,17 +929,27 @@ const App = (() => {
       }
     });
     const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
-    if (st === 'LISTO_DESPACHO') {
-      const ruta = document.createElement('select'); ruta.className = 'sel';
-      ruta.add(new Option('Selecciona ruta…', ''));
-      (state.catalogs.rutas || []).forEach((rt) => ruta.add(new Option(rt.nombre || rt.name || ('Ruta ' + rt.id), rt.id)));
-      const goRuta = document.createElement('button'); goRuta.className = 'btn-ok-sm'; goRuta.textContent = 'EN RUTA';
-      goRuta.addEventListener('click', async () => {
-        await sendTx('transporte_ruta', { traspaso_id: id, ruta_id: ruta.value ? Number(ruta.value) : null }, 'En ruta.');
-        openTransporte();
-      });
-      ctrls.append(ruta, goRuta);
-    } else {                                   // EN_RUTA → entregar
+    if (st === 'LISTO_DESPACHO' || st === 'EN_RUTA') {
+      if (!state.rutas || !state.rutas.length) {
+        const msg = document.createElement('div'); msg.className = 'tp-noroute';
+        msg.textContent = 'No hay rutas disponibles. Contacta al administrador.';
+        ctrls.appendChild(msg);
+      } else {
+        const ruta = document.createElement('select'); ruta.className = 'sel';
+        ruta.add(new Option('Asignar a ruta…', ''));
+        state.rutas.forEach((r) => ruta.add(new Option(rutaLabel(r), r.id)));
+        const go = document.createElement('button'); go.className = 'btn-ok-sm'; go.textContent = 'Asignar ruta';
+        go.addEventListener('click', async () => {
+          if (!ruta.value) { toast('Elige una ruta.', 'warn'); return; }
+          try {
+            await ApiClient.asignarRuta({ traspaso_id: id, logistic_route_id: Number(ruta.value) });
+            toast('Traspaso asignado a la ruta.', 'ok'); openTransporte();
+          } catch (e) { logError('transporte/asignar', e); toast(e.message || 'No se pudo asignar.', 'err'); }
+        });
+        ctrls.append(ruta, go);
+      }
+    }
+    if (st === 'EN_RUTA') {                       // marcar entrega física → PENDIENTE_RECEPCION
       const goEnt = document.createElement('button'); goEnt.className = 'btn-prim-sm'; goEnt.textContent = 'ENTREGAR';
       goEnt.addEventListener('click', async () => {
         await sendTx('transporte_entregar', { traspaso_id: id }, 'Entregado (PENDIENTE_RECEPCION).');

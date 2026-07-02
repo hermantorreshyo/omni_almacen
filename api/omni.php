@@ -70,7 +70,8 @@ $UP = [
     'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
     'transfer_picking'     => '/inventory/transfers/%d/picking',      // PUT
     'transfer_dispatch'    => '/inventory/transfers/%d/dispatch',     // PUT
-    'transfer_route'       => '/inventory/transfers/%d/route',        // PUT
+    'transfer_route'       => '/inventory/transfers/%d/route',        // PUT (legacy)
+    'transfer_assign_route'=> '/inventory/transfers/%d/assign-route', // PUT asignar a ruta logística
     'transfer_deliver'     => '/inventory/transfers/%d/deliver',      // PUT
     'transfer_close'       => '/inventory/transfers/%d/close',        // PUT
     'roles'            => '/rbac/roles',                        // GET roles operativos
@@ -356,6 +357,19 @@ switch ($action) {
         $body = ['items' => $in['items'] ?? []];
         if (!empty($in['notes'])) $body['notes'] = $in['notes'];
         relay(client()->request('PUT', sprintf($UP['transfer_dispatch'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'rutas_activas': {
+        requireAuth();
+        $status = preg_replace('/[^a-z_]/', '', strtolower($_GET['status'] ?? ''));
+        relay(client()->request('GET', $UP['routes'] . ($status ? '?status=' . $status : ''), null, true));
+    }
+    case 'traspaso_asignar_ruta': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
+        $ruta = (int) ($in['logistic_route_id'] ?? $in['ruta_id'] ?? 0);
+        if ($id <= 0 || $ruta <= 0) fail('ERR_PARAM', 'traspaso_id y logistic_route_id son obligatorios.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_assign_route'], $id),
+            json_encode(['logistic_route_id' => $ruta], JSON_UNESCAPED_UNICODE), true));
     }
     case 'transporte_ruta': {
         requireAuth();
