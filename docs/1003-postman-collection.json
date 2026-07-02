@@ -599,12 +599,44 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"movement_type\": \"Traslado Externo\",\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 5,\n  \"interlocutor_id_origin\": 2,\n  \"interlocutor_id_dest\": 7,\n  \"notes\": \"Reposición tienda centro\",\n  \"items\": [\n    {\n      \"item_id\": 111,\n      \"item_type\": \"sku\",\n      \"batch_id\": 19,\n      \"quantity_requested\": 10\n    }\n  ]\n}",
+              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 5,\n  \"notes\": \"Reposición tienda centro\",\n  \"items\": [\n    {\n      \"item_id\": 111,\n      \"item_type\": \"sku\",\n      \"batch_id\": 19,\n      \"quantity_requested\": 10\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
+            }
+          }
+        },
+        {
+          "name": "Detalle de traspaso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=traspaso_detalle&id=42",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "traspaso_detalle"
+                },
+                {
+                  "key": "id",
+                  "value": "42"
+                }
+              ]
             }
           }
         },

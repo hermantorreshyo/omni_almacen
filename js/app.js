@@ -705,11 +705,9 @@ const App = (() => {
       toast('No se pudo resolver origen/destino. Avisa al encargado.', 'err'); return;
     }
     const payload = {
-      movement_type: 'Traslado Externo',
       location_id_origin: state.ctx.originLocId,
       location_id_destination: state.ctx.destLocId,
-      interlocutor_id_origin: state.ctx.originIntId ?? null,
-      interlocutor_id_dest: state.ctx.destIntId ?? null,
+      // interlocutor_id_origin/dest NO se envían: el API los resuelve desde las ubicaciones.
       items: state.ctx.items.map((it) => ({
         item_id: it.item_id, item_type: 'sku', batch_id: it.batch_id, quantity_requested: it.quantity_requested,
       })),   // batch_id resuelto por FEFO al añadir el ítem (el usuario no elige lote)
@@ -746,7 +744,11 @@ const App = (() => {
     } catch (e) { logError('transfer/detalle', e); return []; }
   }
   function itemCount(t) {
-    return t.item_count ?? t.items_count ?? t.total_items ?? (Array.isArray(t.items) ? t.items.length : null);
+    if (t.item_count != null) return Number(t.item_count);
+    if (t.items_count != null) return Number(t.items_count);
+    if (t.total_items != null) return Number(t.total_items);
+    if (Array.isArray(t.items) && t.items.length) return t.items.length;
+    return null;                     // el listado no anida ítems → "ver detalle"
   }
   async function iniciarPicking(t) {
     try {
