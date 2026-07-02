@@ -593,36 +593,48 @@ const App = (() => {
   // A) Solicitar insumos
   async function openSolicitar() {
     view('view-solicitar');
-    state.ctx = { items: [], originLocId: null, destLocId: null };
+    state.ctx = { items: [], originLocId: null, destLocId: null, fabricas: [] };
     el('sol-cant').value = '';
     el('sol-notes').value = '';
     resetSkuSearch('sol-sku-q', 'sol-sku-res');
     bindNumpad(el('sol-cant'));
-    el('sol-origen-lbl').textContent = 'Resolviendo…';
     el('sol-dest-lbl').textContent = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
+    fillSelect(el('sol-origen'), [], intName, 'Cargando fábricas…');
     renderSolItems();
     el('sol-sku-q')._skuLoad();            // muestra el listado de SKUs activos
+    await loadFabricas();
     await resolveSolEndpoints();
   }
-  /* Origen = interlocutor OBRADOR (fábrica). Destino = interlocutor de trabajo. */
-  async function resolveSolEndpoints() {
-    await ensureCatalog('locations');
-    let obrador = null;
+  /* Carga fábricas (origen), ordenadas por id ascendente; la primera por defecto. */
+  async function loadFabricas() {
     try {
       const fr = await ApiClient.catalog('interlocutors', { type: 'fabrica' });
-      const fabricas = rowsOf(fr.data);
-      obrador = fabricas.find((i) => /obrador/i.test(intName(i))) || fabricas[0] || null;
-    } catch (e) { logError('sol/obrador', e); }
+      const fabricas = rowsOf(fr.data).slice().sort((a, b) => Number(a.id) - Number(b.id));
+      state.ctx.fabricas = fabricas;
+      const sel = el('sol-origen'); sel.innerHTML = '';
+      fabricas.forEach((f, i) => {
+        const o = document.createElement('option');
+        o.value = String(f.id); o.textContent = intName(f);
+        if (i === 0) o.selected = true;                 // primera por defecto
+        sel.appendChild(o);
+      });
+      if (!fabricas.length) fillSelect(sel, [], intName, 'Sin fábricas');
+      sel.onchange = () => resolveSolEndpoints();
+    } catch (e) { logError('sol/fabricas', e); fillSelect(el('sol-origen'), [], intName, 'Sin fábricas'); }
+  }
+  /* Resuelve ubicaciones e interlocutores según la fábrica de origen elegida. */
+  async function resolveSolEndpoints() {
+    await ensureCatalog('locations');
+    const originIntId = Number(el('sol-origen').value) || (state.ctx.fabricas[0] && state.ctx.fabricas[0].id) || null;
     const locs = state.catalogs.locations;
-    const obradorLocs = obrador ? locs.filter((l) => Number(l.interlocutor_id) === Number(obrador.id)) : [];
-    // Preferir la ubicación de tipo "bodega" del OBRADOR (recomendación API CORE).
-    const oLoc = obradorLocs.find((l) => String(l.area_type || '').toLowerCase() === 'bodega') || obradorLocs[0] || null;
+    const originLocs = originIntId ? locs.filter((l) => Number(l.interlocutor_id) === Number(originIntId)) : [];
+    // Preferir la ubicación tipo "bodega" de la fábrica (recomendación API CORE).
+    const oLoc = originLocs.find((l) => String(l.area_type || '').toLowerCase() === 'bodega') || originLocs[0] || null;
     const dLoc = locs.find((l) => Number(l.interlocutor_id) === Number(state.interlocutor));
+    state.ctx.originIntId = originIntId;
     state.ctx.originLocId = oLoc ? oLoc.id : null;
     state.ctx.destLocId   = dLoc ? dLoc.id : null;
-    state.ctx.originIntId = obrador ? obrador.id : (oLoc ? oLoc.interlocutor_id : null);
     state.ctx.destIntId   = state.interlocutor ?? (dLoc ? dLoc.interlocutor_id : null);
-    el('sol-origen-lbl').textContent = obrador ? intName(obrador) : 'Obrador (no encontrado)';
     el('sol-dest-lbl').textContent = (dLoc && dLoc.interlocutor_name) || state.interlocutorName || ('Interlocutor ' + state.interlocutor);
   }
   function intName(i) { return i.commercial_name || i.fiscal_name || i.name || i.nombre || ('Interlocutor ' + i.id); }
@@ -654,8 +666,13 @@ const App = (() => {
       const params = { item_id: item };
       if (state.ctx.originLocId) params.location_id = state.ctx.originLocId;
       if (!restricted) params.include_empty = 1;
-      const r = await ApiClient.batches(params);
-      const lots = rowsOf(r.data).slice().sort((a, b) =>
+      let lots = rowsOf((await ApiClient.batches(params)).data);
+      // Implantación: si no hay lotes en la bodega de origen, buscar en cualquier
+      // ubicación (los lotes de inventario inicial pueden estar en otra parte).
+      if (!restricted && !lots.length && state.ctx.originLocId) {
+        lots = rowsOf((await ApiClient.batches({ item_id: item, include_empty: 1 })).data);
+      }
+      lots = lots.slice().sort((a, b) =>
         String(a.expiration_date || a.fecha_caducidad || '').localeCompare(String(b.expiration_date || b.fecha_caducidad || '')));
       lot = lots[0] || null;
     } catch (e) { logError('sol/fefo', e); }
@@ -719,10 +736,23 @@ const App = (() => {
       });
     } catch (e) { logError('picking/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
   }
+  /* El listado de traspasos no anida ítems; se obtienen del detalle /{id}. */
+  async function transferItems(t) {
+    if (Array.isArray(t.items) && t.items.length) return t.items;
+    try {
+      const r = await ApiClient.traspasoDetalle(tId(t));
+      const d = r?.data ?? {};
+      return d.items || d.details || d.lineas || [];
+    } catch (e) { logError('transfer/detalle', e); return []; }
+  }
+  function itemCount(t) {
+    return t.item_count ?? t.items_count ?? t.total_items ?? (Array.isArray(t.items) ? t.items.length : null);
+  }
   async function iniciarPicking(t) {
     try {
       await ApiClient.pickingIniciar({ traspaso_id: tId(t) });   // → EN_PICKING (bloqueo)
-      state.ctx = { traspaso: t, items: (t.items || []).map((it) => ({ ...it, despachada: null })) };
+      const items = await transferItems(t);
+      state.ctx = { traspaso: t, items: items.map((it) => ({ ...it, despachada: null })) };
       renderAlistar();
     } catch (e) { logError('picking/iniciar', e); toast(e.message, 'err'); }
   }
@@ -812,13 +842,14 @@ const App = (() => {
         const id = tId(t);
         const c = document.createElement('button'); c.className = 'rowcard';
         c.innerHTML = `<div><b>Traspaso #${id}</b><small>${t.notes ?? ''}</small></div><span class="chip">PENDIENTE</span>`;
-        c.addEventListener('click', () => openCierre(t));
+        c.addEventListener('click', () => openCierre(t).catch(() => {}));
         list.appendChild(c);
       });
     } catch (e) { logError('recibir/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
   }
-  function openCierre(t) {
-    state.ctx = { traspaso: t, items: (t.items || []).map((it) => ({ ...it, recibida: null })) };
+  async function openCierre(t) {
+    const items = await transferItems(t);
+    state.ctx = { traspaso: t, items: items.map((it) => ({ ...it, recibida: null })) };
     view('view-cierre');
     el('cierre-title').textContent = `Recepción Traspaso #${tId(t)}`;
     const grid = el('cierre-grid'); grid.innerHTML = '';
@@ -912,11 +943,24 @@ const App = (() => {
     if (!total) { list.innerHTML = empty('Sin traspasos en tu tienda.'); return; }
     list.innerHTML = `<div class="perm-card-h" style="margin:14px 0 8px;">Detalle</div>`;
     rows.slice(0, 25).forEach((t) => {
-      const nItems = (t.items || []).length;
-      const c = document.createElement('div'); c.className = 'rowcard';
-      c.innerHTML = `<div><b>Traspaso #${tId(t)}</b><small>${nItems} ítem(s)${t.notes ? ' · ' + t.notes : ''}</small></div>
+      const n = itemCount(t);
+      const c = document.createElement('div'); c.className = 'rowcard rowcard-exp';
+      c.innerHTML = `<div><b>Traspaso #${tId(t)}</b><small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small></div>
         <span class="chip">${tState(t).replace(/_/g, ' ')}</span>`;
-      list.appendChild(c);
+      const det = document.createElement('div'); det.className = 'dash-det hidden';
+      c.addEventListener('click', async () => {
+        det.classList.toggle('hidden');
+        if (!det.dataset.loaded) {
+          det.innerHTML = '<div class="skel"></div>';
+          const items = await transferItems(t);
+          det.dataset.loaded = '1';
+          det.innerHTML = items.length
+            ? items.map((it) => `<div class="dash-det-row"><span>${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</span>
+                <b>${it.quantity_requested ?? it.quantity ?? 0}</b></div>`).join('')
+            : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
+        }
+      });
+      list.appendChild(c); list.appendChild(det);
     });
   }
   function kpiCard(label, value, tone) {

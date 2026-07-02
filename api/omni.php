@@ -67,6 +67,7 @@ $UP = [
     /* Workflow de traspaso externo — PENDIENTE de publicación en API CORE
        (ver REQ_TRANSFER_WORKFLOW_1003.md). Rutas ya alineadas al contrato. */
     'transfers'            => '/inventory/transfers',                 // POST crear / GET ?state=
+    'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
     'transfer_picking'     => '/inventory/transfers/%d/picking',      // PUT
     'transfer_dispatch'    => '/inventory/transfers/%d/dispatch',     // PUT
     'transfer_route'       => '/inventory/transfers/%d/route',        // PUT
@@ -331,6 +332,12 @@ switch ($action) {
         requireAuth();
         $state = preg_replace('/[^A-Z_]/', '', strtoupper($_GET['estado'] ?? $_GET['state'] ?? ''));
         relay(client()->request('GET', $UP['transfers'] . ($state ? '?state=' . $state : ''), null, true));
+    }
+    case 'traspaso_detalle': {
+        requireAuth();
+        $id = (int) ($_GET['id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'id de traspaso inválido.', 422);
+        relay(client()->request('GET', sprintf($UP['transfer_detail'], $id), null, true));
     }
     case 'traspaso_solicitar': {
         requireAuth();

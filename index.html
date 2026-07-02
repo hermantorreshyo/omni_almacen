@@ -96,6 +96,10 @@
     .oc-card-h b { font-size: 1rem; } .oc-card-h small { color: #6b7280; }
     .oc-card-sub { font-size: .85rem; color: #374151; margin: 4px 0 8px; }
     .oc-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+    .rowcard-exp { cursor: pointer; }
+    .dash-det { background: #faf7fb; border: 1px solid #ece8f0; border-radius: 12px; margin: -6px 0 8px; padding: 8px 12px; }
+    .dash-det-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed #eee; font-size: .9rem; }
+    .dash-det-row:last-child { border-bottom: 0; }
     .hub-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
     .hub-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #4b5563; }
     .hub-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -257,8 +261,8 @@
     <section id="view-solicitar" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Solicitar traspaso</h1>
-      <div class="field-label">Origen (Obrador)</div>
-      <div class="ro-field" id="sol-origen-lbl">—</div>
+      <div class="field-label">Origen (fábrica)</div>
+      <select id="sol-origen" class="sel"></select>
       <div class="field-label">Destino (tu tienda)</div>
       <div class="ro-field" id="sol-dest-lbl">—</div>
       <div class="field-label">Añadir ítem</div>
