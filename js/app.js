@@ -876,95 +876,156 @@ const App = (() => {
     openPicking();
   }
 
-  // D) Transportista
+  // D) Transportista: pedidos listos para transportar / en ruta (origen = mi sede).
   async function openTransporte() {
     view('view-transporte');
-    await ensureCatalog('rutas');
+    await ensureCatalogs(['rutas', 'locations', 'interlocutors']);
     const list = el('transporte-list'); list.innerHTML = skeleton();
     try {
-      const r = await ApiClient.traspasos('LISTO_DESPACHO');
-      const rows = rowsOf(r.data);
-      list.innerHTML = rows.length ? '' : empty('Sin órdenes para despacho.');
-      rows.forEach((t) => {
-        const id = tId(t);
-        const c = document.createElement('div'); c.className = 'rowcard col';
-        c.innerHTML = `<div class="rowcard-top"><b>Traspaso #${id}</b><span class="chip">${tState(t)}</span></div>`;
-        const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
-        const ruta = document.createElement('select'); ruta.className = 'sel';
-        ruta.add(new Option('Selecciona ruta…', ''));
-        state.catalogs.rutas.forEach((rt) => ruta.add(new Option(rt.nombre || rt.name || ('Ruta ' + rt.id), rt.id)));
-        const goRuta = document.createElement('button'); goRuta.className = 'btn-ok-sm'; goRuta.textContent = 'EN RUTA';
-        const goEnt  = document.createElement('button'); goEnt.className = 'btn-prim-sm'; goEnt.textContent = 'ENTREGAR'; goEnt.disabled = true;
-        goRuta.addEventListener('click', async () => {
-          await sendTx('transporte_ruta', { traspaso_id: id, ruta_id: ruta.value ? Number(ruta.value) : null }, 'En ruta.');
-          goRuta.disabled = true; goEnt.disabled = false;
-        });
-        goEnt.addEventListener('click', async () => {
-          await sendTx('transporte_entregar', { traspaso_id: id }, 'Entregado (PENDIENTE_RECEPCION).');
-          openTransporte();
-        });
-        ctrls.append(ruta, goRuta, goEnt);
-        c.appendChild(ctrls);
-        list.appendChild(c);
-      });
+      const [listo, enruta] = await Promise.all([
+        ApiClient.traspasos('LISTO_DESPACHO').catch(() => ({ data: [] })),
+        ApiClient.traspasos('EN_RUTA').catch(() => ({ data: [] })),
+      ]);
+      const mine = Number(state.interlocutor);
+      const seen = new Set();
+      const rows = [...rowsOf(listo.data), ...rowsOf(enruta.data)]
+        .filter((t) => originIntOf(t) === mine)
+        .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
+      list.innerHTML = rows.length ? '' : empty('No hay pedidos listos para transportar.');
+      rows.forEach((t) => list.appendChild(transporteCard(t)));
     } catch (e) { logError('transporte/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
   }
+  function transporteCard(t) {
+    const id = tId(t); const st = tState(t);
+    const c = document.createElement('div'); c.className = 'rowcard col';
+    c.innerHTML = `<div class="rowcard-top"><b>Traspaso #${id}</b>
+      <span class="chip ${st === 'EN_RUTA' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ')}</span></div>
+      <small class="tp-sub">Entregar a: ${intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small>`;
+    // Detalle expandible: qué se entrega (cantidades despachadas)
+    const det = document.createElement('div'); det.className = 'dash-det hidden';
+    const seeBtn = document.createElement('button'); seeBtn.className = 'btn-ghost btn-see'; seeBtn.textContent = 'Ver qué entrego';
+    seeBtn.addEventListener('click', async () => {
+      det.classList.toggle('hidden');
+      if (!det.dataset.loaded) {
+        det.innerHTML = '<div class="skel"></div>';
+        const items = await transferItems(t); det.dataset.loaded = '1';
+        det.innerHTML = items.length ? items.map((it) =>
+          `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${it.quantity_dispatched ?? it.quantity_requested ?? 0}</b></div>`).join('')
+          : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
+      }
+    });
+    const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
+    if (st === 'LISTO_DESPACHO') {
+      const ruta = document.createElement('select'); ruta.className = 'sel';
+      ruta.add(new Option('Selecciona ruta…', ''));
+      (state.catalogs.rutas || []).forEach((rt) => ruta.add(new Option(rt.nombre || rt.name || ('Ruta ' + rt.id), rt.id)));
+      const goRuta = document.createElement('button'); goRuta.className = 'btn-ok-sm'; goRuta.textContent = 'EN RUTA';
+      goRuta.addEventListener('click', async () => {
+        await sendTx('transporte_ruta', { traspaso_id: id, ruta_id: ruta.value ? Number(ruta.value) : null }, 'En ruta.');
+        openTransporte();
+      });
+      ctrls.append(ruta, goRuta);
+    } else {                                   // EN_RUTA → entregar
+      const goEnt = document.createElement('button'); goEnt.className = 'btn-prim-sm'; goEnt.textContent = 'ENTREGAR';
+      goEnt.addEventListener('click', async () => {
+        await sendTx('transporte_entregar', { traspaso_id: id }, 'Entregado (PENDIENTE_RECEPCION).');
+        openTransporte();
+      });
+      ctrls.append(goEnt);
+    }
+    c.append(seeBtn, det, ctrls);
+    return c;
+  }
 
-  // E) Recepción y cierre (Encargado de Tienda)
+  // E) Recepción y cierre — la tienda destino recibe sus pedidos en tránsito.
   async function openRecibir() {
     view('view-recibir');
+    await ensureCatalogs(['locations', 'interlocutors']);
     const list = el('recibir-list'); list.innerHTML = skeleton();
     try {
       const r = await ApiClient.traspasos('PENDIENTE_RECEPCION');
-      const rows = rowsOf(r.data);
-      list.innerHTML = rows.length ? '' : empty('No hay traspasos pendientes.');
+      const mine = Number(state.interlocutor);
+      const rows = rowsOf(r.data).filter((t) => destIntOf(t) === mine);   // solo lo que YO pedí
+      list.innerHTML = rows.length ? '' : empty('No hay entregas por recibir.');
       rows.forEach((t) => {
-        const id = tId(t);
         const c = document.createElement('button'); c.className = 'rowcard';
-        c.innerHTML = `<div><b>Traspaso #${id}</b><small>${t.notes ?? ''}</small></div><span class="chip">PENDIENTE</span>`;
+        c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
+          <small>Desde: ${intNameById(originIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>
+          <span class="chip chip-amb">EN TRÁNSITO</span>`;
         c.addEventListener('click', () => openCierre(t).catch(() => {}));
         list.appendChild(c);
       });
-    } catch (e) { logError('recibir/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
+    } catch (e) { logError('recibir/list', e); list.innerHTML = empty('No hay entregas por recibir.'); }
   }
   async function openCierre(t) {
-    const items = await transferItems(t);
-    state.ctx = { traspaso: t, items: items.map((it) => ({ ...it, recibida: null })) };
+    let header = t, items = [];
+    try {
+      const r = await ApiClient.traspasoDetalle(tId(t));
+      const d = r?.data ?? {}; header = d.transfer || t; items = d.items || d.details || [];
+    } catch (e) { logError('cierre/detalle', e); items = await transferItems(t); }
+    state.ctx = {
+      traspaso: t, header,
+      items: items.map((it) => ({ ...it, recibida: Number(it.quantity_dispatched ?? it.quantity_requested ?? 0), obs: '', done: false })),
+    };
     view('view-cierre');
     el('cierre-title').textContent = `Recepción Traspaso #${tId(t)}`;
+    el('cierre-sub').textContent = `Desde: ${intNameById(originIntOf(header))}${transferDate(header) ? ' · ' + fmtDT(transferDate(header)) : ''}`;
     const grid = el('cierre-grid'); grid.innerHTML = '';
     state.ctx.items.forEach((it, i) => {
-      const sol = it.quantity_requested ?? 0;
-      const des = it.quantity_dispatched ?? 0;
-      const row = document.createElement('div'); row.className = 'grid-row';
-      row.innerHTML = `<div class="grid-row-head"><b>${itemLabel(it)}</b>
-        <small>Solicitada ${sol} · Despachada ${des}</small></div>
-        <div class="grid-row-body"><input id="cie-${i}" class="num" inputmode="numeric" placeholder="Recibida" /></div>`;
-      grid.appendChild(row);
+      const env = Number(it.quantity_dispatched ?? it.quantity_requested ?? 0);
+      const card = document.createElement('div'); card.className = 'ali-card'; card.id = `cie-card-${i}`;
+      card.innerHTML = `
+        <label class="ali-check"><input type="checkbox" id="cie-chk-${i}" /><b>${itemLabel(it)}</b></label>
+        <div class="oc-card-sub">Enviada: <b>${env}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
+        <div class="oc-row2">
+          <div><div class="field-label">Recibida</div><input id="cie-qty-${i}" class="num" inputmode="numeric" value="${env}" /></div>
+          <div><div class="field-label">Observación</div><input id="cie-obs-${i}" class="txt" placeholder="Opcional…" /></div>
+        </div>`;
+      grid.appendChild(card);
       setTimeout(() => {
-        const input = el(`cie-${i}`); bindNumpad(input);
-        input.addEventListener('input', () => { it.recibida = Number(input.value); evalCierreObs(); });
+        const q = el(`cie-qty-${i}`), chk = el(`cie-chk-${i}`), obs = el(`cie-obs-${i}`);
+        bindNumpad(q);
+        q.addEventListener('input', () => { it.recibida = Number(q.value); });
+        obs.addEventListener('input', () => { it.obs = obs.value; });
+        chk.addEventListener('change', () => {
+          it.done = chk.checked; card.classList.toggle('ali-done', chk.checked); updateCieProgress();
+        });
       }, 0);
     });
-    el('cierre-obs-wrap').classList.add('hidden');
+    el('cie-all').checked = false;
+    updateCieProgress();
   }
-  function evalCierreObs() {
-    const diff = state.ctx.items.some((it) => it.recibida !== null && it.recibida !== (it.quantity_dispatched ?? 0));
-    el('cierre-obs-wrap').classList.toggle('hidden', !diff);
+  function updateCieProgress() {
+    const total = state.ctx.items.length;
+    const done = state.ctx.items.filter((it) => it.done).length;
+    el('cie-progress').textContent = `${done}/${total} revisados`;
+    el('cierre-confirm').disabled = total === 0 || done < total;
+  }
+  function toggleCieAll(checked) {
+    state.ctx.items.forEach((it, i) => {
+      it.done = checked;
+      const chk = el(`cie-chk-${i}`); if (chk) chk.checked = checked;
+      const card = el(`cie-card-${i}`); if (card) card.classList.toggle('ali-done', checked);
+    });
+    updateCieProgress();
   }
   async function confirmCierre() {
     const items = state.ctx.items;
-    if (items.some((it) => it.recibida === null)) { toast('Cuenta todos los ítems.', 'warn'); return; }
-    const diff = items.some((it) => it.recibida !== (it.quantity_dispatched ?? 0));
-    const obs = el('cierre-obs').value.trim();
-    if (diff && !obs) { toast('Observaciones obligatorias por diferencia.', 'warn'); return; }
+    if (!items.every((it) => it.done)) { toast('Marca todos los ítems como revisados.', 'warn'); return; }
+    const diffMissing = items.find((it) => it.recibida !== Number(it.quantity_dispatched ?? it.quantity_requested ?? 0) && !it.obs.trim());
+    if (diffMissing) { toast('Añade observación en los ítems con diferencia.', 'warn'); return; }
+    const notes = items.filter((it) => it.obs.trim()).map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
-      reception_date: new Date().toISOString().slice(0, 10),   // fecha física de recepción
-      notes: obs,
-      items: items.map((it) => ({ item_id: it.item_id, batch_id: it.batch_id, quantity_received: it.recibida })),
+      reception_date: new Date().toISOString().slice(0, 10),
+      notes,
+      items: items.map((it) => {
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_received: it.recibida };
+        if (it.obs.trim()) o.notes = it.obs.trim();
+        return o;
+      }),
     };
-    await sendTx('traspaso_cerrar', payload, 'Traspaso CERRADO. Stock impactado.');
+    await sendTx('traspaso_cerrar', payload, 'Traspaso CERRADO. Stock recibido.');
     openRecibir();
   }
 
@@ -1265,6 +1326,7 @@ const App = (() => {
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));
     el('ali-all').addEventListener('change', (e) => toggleAliAll(e.target.checked));
     el('cierre-confirm').addEventListener('click', () => confirmCierre().catch(() => {}));
+    el('cie-all').addEventListener('change', (e) => toggleCieAll(e.target.checked));
     el('merma-capture').addEventListener('click', captureMerma);
     el('merma-confirm').addEventListener('click', () => confirmMerma().catch(() => {}));
     el('perm-save').addEventListener('click', () => savePermisos().catch(() => {}));

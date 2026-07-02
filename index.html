@@ -109,6 +109,8 @@
     .ali-card { background: #fff; border: 1px solid #e5e7eb; border-left: 5px solid #F59E0B; border-radius: 16px; padding: 16px; }
     .ali-card.ali-done { border-left-color: #10B981; background: #f5fbf8; }
     .chip-amb { background: rgba(245,158,11,.15); color: #a86a06; }
+    .tp-sub { color: #6b7280; display: block; margin: 4px 0 8px; }
+    .btn-see { padding: 6px 0; font-size: .85rem; color: #642a72; }
     .hub-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
     .hub-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #4b5563; }
     .hub-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -317,6 +319,7 @@
     <section id="view-transporte" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Ruta de transporte</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Pedidos listos para transportar y en ruta. Toca un pedido para ver qué entregas.</p>
       <div id="transporte-list"></div>
     </section>
 
@@ -324,19 +327,21 @@
     <section id="view-recibir" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Entregas por recibir</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Tus pedidos en tránsito, pendientes de recepción.</p>
       <div id="recibir-list"></div>
     </section>
 
     <section id="view-cierre" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 id="cierre-title" class="sec-title">Recepción de traspaso</h1>
-      <div id="cierre-grid"></div>
-      <div id="cierre-obs-wrap" class="hidden">
-        <div class="field-label">Observaciones (obligatorio por diferencia)</div>
-        <textarea id="cierre-obs" class="txt" placeholder="Describe la diferencia…"></textarea>
+      <div id="cierre-sub" class="ali-sub">—</div>
+      <div class="ali-bar">
+        <label class="ali-check ali-all-lbl"><input type="checkbox" id="cie-all" /> Marcar todos</label>
+        <span id="cie-progress" class="ali-progress">0/0 revisados</span>
       </div>
+      <div id="cierre-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
       <div style="height:12px;"></div>
-      <button id="cierre-confirm" class="btn-ok">Aceptar entrega y CERRAR</button>
+      <button id="cierre-confirm" class="btn-ok" disabled>Aceptar entrega y CERRAR</button>
     </section>
 
     <!-- ── FLUJO 4: MERMA ───────────────────────────────────────── -->
