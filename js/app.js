@@ -187,8 +187,28 @@ const App = (() => {
     el('hdr-user').textContent = state.user.nombre || state.user.username || state.rol || '—';
     el('hdr-rol').textContent  = state.rol || '—';
     el('app-header').classList.remove('hidden');
+    await loadParams();
     await loadScreens();
     renderHub();
+  }
+
+  /* Parámetros de implantación (GET /system/params). Adaptan validaciones. */
+  async function loadParams() {
+    // Defaults = modo implantación (no restringir por stock).
+    state.params = { inventory_restriction: false, stock_negative_allowed: true, recipe_restriction: false };
+    try {
+      const r = await ApiClient.systemParams();
+      const d = r?.data ?? {};
+      const val = (k, def) => (d[k] && typeof d[k] === 'object' ? (d[k].value ?? def) : (d[k] ?? def));
+      state.params = {
+        inventory_restriction: !!val('inventory_restriction', false),
+        stock_negative_allowed: val('stock_negative_allowed', true) !== false,
+        recipe_restriction: !!val('recipe_restriction', false),
+      };
+    } catch (e) { logError('system/params', e); }
+  }
+  function stockRestricted() {
+    return state.params && state.params.inventory_restriction === true && state.params.stock_negative_allowed === false;
   }
 
   /* Pantallas visibles del usuario actual (driven por el API CORE). */
@@ -600,6 +620,8 @@ const App = (() => {
     const dLoc = locs.find((l) => Number(l.interlocutor_id) === Number(state.interlocutor));
     state.ctx.originLocId = oLoc ? oLoc.id : null;
     state.ctx.destLocId   = dLoc ? dLoc.id : null;
+    state.ctx.originIntId = obrador ? obrador.id : (oLoc ? oLoc.interlocutor_id : null);
+    state.ctx.destIntId   = state.interlocutor ?? (dLoc ? dLoc.interlocutor_id : null);
     el('sol-origen-lbl').textContent = obrador ? intName(obrador) : 'Obrador (no encontrado)';
     el('sol-dest-lbl').textContent = (dLoc && dLoc.interlocutor_name) || state.interlocutorName || ('Interlocutor ' + state.interlocutor);
   }
@@ -622,24 +644,32 @@ const App = (() => {
     if (!item || !cant) { toast('Elige un SKU del listado e indica la cantidad.', 'warn'); return; }
     const label = el('sol-sku-res').querySelector('.sku-opt.sel')?.textContent || ('SKU ' + item);
     const qtyBase = Metrology.toBase(cant, unit);
-    // El API exige batch_id; lo resolvemos por FEFO con stock real en el origen
-    // (filtro location_id, soportado por el API CORE). El usuario no elige lote.
+    const restricted = stockRestricted();
+    // El API exige batch_id; lo resolvemos por FEFO en la bodega de origen.
+    // Implantación: include_empty=1 (acepta lotes con stock 0, sin avisos).
+    // Producción: solo lotes con stock; bloquea si no hay y avisa si no cubre.
     let lot = null;
     setBusy('sol-add', true);
     try {
       const params = { item_id: item };
       if (state.ctx.originLocId) params.location_id = state.ctx.originLocId;
+      if (!restricted) params.include_empty = 1;
       const r = await ApiClient.batches(params);
       const lots = rowsOf(r.data).slice().sort((a, b) =>
         String(a.expiration_date || a.fecha_caducidad || '').localeCompare(String(b.expiration_date || b.fecha_caducidad || '')));
       lot = lots[0] || null;
     } catch (e) { logError('sol/fefo', e); }
     finally { setBusy('sol-add', false); }
-    if (!lot) { toast('Ese SKU no tiene lotes con stock en bodega.', 'warn'); return; }
-    // Si el API devolvió quantity_available, avisar si el lote FEFO no cubre lo pedido.
-    const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
-    if (avail != null && avail < qtyBase) {
-      toast(`Lote FEFO con stock insuficiente (${avail} disp.). Se solicitará igualmente.`, 'warn');
+    if (!lot) {
+      toast(restricted ? 'Sin lotes con stock en bodega para este producto.'
+                       : 'Ese SKU no tiene lotes registrados en bodega.', 'warn');
+      return;
+    }
+    if (restricted) {                                   // solo en modo producción
+      const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
+      if (avail != null && avail < qtyBase) {
+        toast(`Stock insuficiente. Disponible: ${avail}. Se solicitará igualmente.`, 'warn');
+      }
     }
     state.ctx.items.push({
       item_id: item,
@@ -658,8 +688,11 @@ const App = (() => {
       toast('No se pudo resolver origen/destino. Avisa al encargado.', 'err'); return;
     }
     const payload = {
+      movement_type: 'Traslado Externo',
       location_id_origin: state.ctx.originLocId,
       location_id_destination: state.ctx.destLocId,
+      interlocutor_id_origin: state.ctx.originIntId ?? null,
+      interlocutor_id_dest: state.ctx.destIntId ?? null,
       items: state.ctx.items.map((it) => ({
         item_id: it.item_id, item_type: 'sku', batch_id: it.batch_id, quantity_requested: it.quantity_requested,
       })),   // batch_id resuelto por FEFO al añadir el ítem (el usuario no elige lote)
@@ -816,6 +849,7 @@ const App = (() => {
     if (diff && !obs) { toast('Observaciones obligatorias por diferencia.', 'warn'); return; }
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
+      reception_date: new Date().toISOString().slice(0, 10),   // fecha física de recepción
       notes: obs,
       items: items.map((it) => ({ item_id: it.item_id, batch_id: it.batch_id, quantity_received: it.recibida })),
     };

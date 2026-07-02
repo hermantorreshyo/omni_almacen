@@ -122,6 +122,7 @@ const ApiClient = (() => {
 
     /* ── Pantallas visibles / Gestor de permisos ── */
     misPantallas: ()      => _request('mis_pantallas'),
+    systemParams: ()      => _request('system_params'),
     rolesListar:  ()      => _request('roles_listar'),
     screensListar:()      => _request('screens_listar'),
     permsListar:  ()      => _request('perms_listar'),

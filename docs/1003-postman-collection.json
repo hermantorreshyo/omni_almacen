@@ -171,6 +171,34 @@
               ]
             }
           }
+        },
+        {
+          "name": "Parámetros de implantación",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=system_params",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "system_params"
+                }
+              ]
+            }
+          }
         }
       ]
     },
@@ -300,7 +328,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/omni.php?action=batches&item_id=5",
+              "raw": "{{base_url}}/api/omni.php?action=batches&item_id=5&location_id=1",
               "host": [
                 "{{base_url}}"
               ],
@@ -316,6 +344,10 @@
                 {
                   "key": "item_id",
                   "value": "5"
+                },
+                {
+                  "key": "location_id",
+                  "value": "1"
                 }
               ]
             }
@@ -567,7 +599,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 10,\n  \"items\": [\n    {\n      \"item_id\": 5,\n      \"item_type\": \"sku\",\n      \"batch_id\": 1,\n      \"quantity_requested\": 2000\n    }\n  ],\n  \"notes\": \"Reposición tienda centro (batch_id por FEFO)\"\n}",
+              "raw": "{\n  \"movement_type\": \"Traslado Externo\",\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 5,\n  \"interlocutor_id_origin\": 2,\n  \"interlocutor_id_dest\": 7,\n  \"notes\": \"Reposición tienda centro\",\n  \"items\": [\n    {\n      \"item_id\": 111,\n      \"item_type\": \"sku\",\n      \"batch_id\": 19,\n      \"quantity_requested\": 10\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -784,7 +816,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"traspaso_id\": 42,\n  \"items\": [\n    {\n      \"item_id\": 5,\n      \"batch_id\": 1,\n      \"quantity_received\": 1975\n    }\n  ]\n}",
+              "raw": "{\n  \"traspaso_id\": 42,\n  \"reception_date\": \"2026-07-02\",\n  \"items\": [\n    {\n      \"item_id\": 111,\n      \"batch_id\": 19,\n      \"quantity_received\": 7\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

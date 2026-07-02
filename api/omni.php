@@ -76,6 +76,7 @@ $UP = [
     'perms_1003'       => '/rbac/subsystems/1003/screen-permissions', // GET / PUT mapa de pantallas
     'screens_catalog'  => '/rbac/subsystems/1003/screens',      // GET pantallas registradas (catálogo SSOT)
     'my_screens'       => '/rbac/subsystems/1003/my-screens',   // GET pantallas del usuario actual
+    'system_params'    => '/system/params',                       // GET parámetros de implantación
 ];
 
 /* ── Matriz RBAC por acción (defensa en servidor) ───────────────────────── */
@@ -363,8 +364,12 @@ switch ($action) {
         requireAuth();
         $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
         if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
-        $body = isset($in['items']) ? ['items' => $in['items']] : new stdClass();
-        relay(client()->request('PUT', sprintf($UP['transfer_close'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
+        $body = [];
+        if (isset($in['items']))          $body['items'] = $in['items'];
+        if (isset($in['reception_date'])) $body['reception_date'] = $in['reception_date'];
+        if (isset($in['notes']))          $body['notes'] = $in['notes'];
+        relay(client()->request('PUT', sprintf($UP['transfer_close'], $id),
+            json_encode($body ?: new stdClass(), JSON_UNESCAPED_UNICODE), true));
     }
 
     /* ── FLUJO 4: MERMAS (POST /inventory/scrap con evidencia) ──────────── */
@@ -379,6 +384,10 @@ switch ($action) {
     case 'mis_pantallas': {
         requireAuth();
         relay(client()->request('GET', $UP['my_screens'], null, true));
+    }
+    case 'system_params': {
+        requireAuth();
+        relay(client()->request('GET', $UP['system_params'], null, true));
     }
 
     /* ── GESTOR DE PERMISOS (solo SuperAdmin) ───────────────────────────── */

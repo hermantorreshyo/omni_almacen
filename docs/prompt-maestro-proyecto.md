@@ -144,5 +144,30 @@ ERR_VALIDATION/ERR_PARAM` · `500 ERR_INTERNAL`. El `error_code` viaja en el sob
 
 ---
 
-*Reconstruir el subsistema respetando estas reglas. Validar siempre las rutas
-contra la colección Postman del API CORE v6.6.0 antes de producción.*
+## PARÁMETROS DE IMPLANTACIÓN (GET /system/params)
+
+Tras el login, `GET /system/params` devuelve banderas que adaptan las
+validaciones del cliente (se guardan en `state.params`):
+
+- **Modo implantación** (`inventory_restriction=false`, `stock_negative_allowed=true`):
+  el FEFO consulta lotes con `include_empty=1`, acepta `quantity_available=0` y
+  **no** muestra avisos de stock; despachos/traspasos/mermas se procesan aunque el
+  stock sea insuficiente (puede quedar negativo).
+- **Modo producción** (`inventory_restriction=true`, `stock_negative_allowed=false`):
+  el FEFO solo trae lotes con stock; sin lotes → "Sin stock en bodega"; si el lote
+  no cubre lo pedido → aviso; el API bloquea despachos sin stock.
+
+El SuperAdmin activa el modo producción desde el Panel Admin; el subsistema cambia
+de comportamiento solo al releer los parámetros en la siguiente sesión (sin recompilar).
+
+---
+
+## MÉTRICAS DEL WORKFLOW DE TRASPASO
+
+`quantity_requested` (solicitado) → `quantity_dispatched` (despachado en picking)
+→ `quantity_received` (recibido al cerrar). El cierre incluye `reception_date`.
+Diferencias: requested−dispatched = pedido no atendido; dispatched−received =
+pérdida en tránsito.
+
+---
+*Reconstruir el subsistema respetando estas reglas. Validar siempre las rutas contra la colección Postman antes de producción.*
