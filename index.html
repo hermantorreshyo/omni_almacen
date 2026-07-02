@@ -100,6 +100,15 @@
     .dash-det { background: #faf7fb; border: 1px solid #ece8f0; border-radius: 12px; margin: -6px 0 8px; padding: 8px 12px; }
     .dash-det-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed #eee; font-size: .9rem; }
     .dash-det-row:last-child { border-bottom: 0; }
+    .ali-sub { color: #642a72; font-weight: 600; font-size: .9rem; margin: -6px 0 12px; }
+    .ali-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .ali-progress { font-size: .85rem; font-weight: 700; color: #642a72; background: #f3edf5; border-radius: 999px; padding: 5px 12px; }
+    .ali-check { display: inline-flex; align-items: center; gap: 8px; font-size: 1rem; cursor: pointer; }
+    .ali-check input { width: 22px; height: 22px; accent-color: #642a72; }
+    .ali-all-lbl { font-size: .9rem; color: #374151; }
+    .ali-card { background: #fff; border: 1px solid #e5e7eb; border-left: 5px solid #F59E0B; border-radius: 16px; padding: 16px; }
+    .ali-card.ali-done { border-left-color: #10B981; background: #f5fbf8; }
+    .chip-amb { background: rgba(245,158,11,.15); color: #a86a06; }
     .hub-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
     .hub-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #4b5563; }
     .hub-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -286,20 +295,22 @@
     <!-- ── FLUJO 3B/C: PICKING ──────────────────────────────────── -->
     <section id="view-picking" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Solicitudes (SOLICITADO)</h1>
+      <h1 class="sec-title">Solicitudes a tu almacén</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Nuevas (SOLICITADO) y en preparación (EN_PICKING).</p>
       <div id="picking-list"></div>
     </section>
 
     <section id="view-alistar" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 id="alistar-title" class="sec-title">Alistar traspaso</h1>
-      <div id="alistar-grid"></div>
-      <div id="alistar-obs-wrap" class="hidden">
-        <div class="field-label">Observaciones (obligatorio por faltante)</div>
-        <textarea id="alistar-obs" class="txt" placeholder="Justifica el quiebre de stock…"></textarea>
+      <div id="alistar-sub" class="ali-sub">—</div>
+      <div class="ali-bar">
+        <label class="ali-check ali-all-lbl"><input type="checkbox" id="ali-all" /> Marcar todos</label>
+        <span id="ali-progress" class="ali-progress">0/0 alistados</span>
       </div>
+      <div id="alistar-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
       <div style="height:12px;"></div>
-      <button id="alistar-confirm" class="btn-ok">Marcar LISTO_DESPACHO</button>
+      <button id="alistar-confirm" class="btn-ok" disabled>Marcar LISTO_DESPACHO</button>
     </section>
 
     <!-- ── FLUJO 3D: TRANSPORTE ─────────────────────────────────── -->

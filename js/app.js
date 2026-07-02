@@ -717,19 +717,56 @@ const App = (() => {
     renderHub();
   }
 
-  // B + C) Picking: bandeja SOLICITADO → iniciar → alistar
+  // Helpers de traspaso (resolver interlocutores y fecha)
+  function intNameById(id) {
+    const f = (state.catalogs.interlocutors || []).find((x) => Number(x.id) === Number(id));
+    return f ? intName(f) : (id != null ? 'Interlocutor ' + id : '—');
+  }
+  function originIntOf(t) {
+    if (t.interlocutor_id_origin != null) return Number(t.interlocutor_id_origin);
+    const l = (state.catalogs.locations || []).find((x) => Number(x.id) === Number(t.location_id_origin));
+    return l ? Number(l.interlocutor_id) : null;
+  }
+  function destIntOf(t) {
+    if (t.interlocutor_id_dest != null) return Number(t.interlocutor_id_dest);
+    const l = (state.catalogs.locations || []).find((x) => Number(x.id) === Number(t.location_id_destination));
+    return l ? Number(l.interlocutor_id) : null;
+  }
+  function transferDate(t) { return t.at_solicitado || t.created_at || t.fecha || ''; }
+  function fmtDT(s) {
+    if (!s) return '';
+    const d = new Date(String(s).replace(' ', 'T'));
+    if (isNaN(d)) return String(s);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  // Picking: solo solicitudes cuyo ORIGEN es mi interlocutor. Incluye SOLICITADO
+  // (nuevas) y EN_PICKING (asignadas a mí, reabribles hasta cambiar de estado).
   async function openPicking() {
     view('view-picking');
     const list = el('picking-list'); list.innerHTML = skeleton();
+    await ensureCatalogs(['locations', 'interlocutors']);
     try {
-      const r = await ApiClient.traspasos('SOLICITADO');
-      const rows = rowsOf(r.data);
-      list.innerHTML = rows.length ? '' : empty('Sin solicitudes en tu centro.');
+      const [sol, enp] = await Promise.all([
+        ApiClient.traspasos('SOLICITADO').catch(() => ({ data: [] })),
+        ApiClient.traspasos('EN_PICKING').catch(() => ({ data: [] })),
+      ]);
+      const mine = Number(state.interlocutor);
+      const seen = new Set();
+      const rows = [...rowsOf(sol.data), ...rowsOf(enp.data)]
+        .filter((t) => originIntOf(t) === mine)
+        .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
+      list.innerHTML = rows.length ? '' : empty('No hay solicitudes para tu almacén.');
       rows.forEach((t) => {
-        const id = tId(t);
+        const st = tState(t);
         const c = document.createElement('button'); c.className = 'rowcard';
-        c.innerHTML = `<div><b>Traspaso #${id}</b><small>${t.notes ?? ''}</small></div><span class="chip">SOLICITADO</span>`;
-        c.addEventListener('click', () => iniciarPicking(t));
+        const badge = st === 'EN_PICKING'
+          ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
+          : '<span class="chip">SOLICITADO</span>';
+        c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
+          <small>Solicita: ${intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>${badge}`;
+        c.addEventListener('click', () => openAlistarFor(t, st !== 'EN_PICKING').catch(() => {}));
         list.appendChild(c);
       });
     } catch (e) { logError('picking/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
@@ -750,51 +787,92 @@ const App = (() => {
     if (Array.isArray(t.items) && t.items.length) return t.items.length;
     return null;                     // el listado no anida ítems → "ver detalle"
   }
-  async function iniciarPicking(t) {
+  // Abre el alistado. start=true inicia el picking (SOLICITADO→EN_PICKING);
+  // start=false reabre una solicitud ya asignada (EN_PICKING) sin re-iniciar.
+  async function openAlistarFor(t, start) {
     try {
-      await ApiClient.pickingIniciar({ traspaso_id: tId(t) });   // → EN_PICKING (bloqueo)
-      const items = await transferItems(t);
-      state.ctx = { traspaso: t, items: items.map((it) => ({ ...it, despachada: null })) };
+      if (start) await ApiClient.pickingIniciar({ traspaso_id: tId(t) });   // → EN_PICKING (bloqueo/asignación)
+      let header = t, items = [];
+      try {
+        const r = await ApiClient.traspasoDetalle(tId(t));
+        const d = r?.data ?? {};
+        header = d.transfer || t;
+        items = d.items || d.details || [];
+      } catch (e) { logError('picking/detalle', e); items = await transferItems(t); }
+      state.ctx = {
+        traspaso: t, header,
+        items: items.map((it) => ({ ...it, despachada: Number(it.quantity_requested ?? 0), obs: '', done: false })),
+      };
       renderAlistar();
-    } catch (e) { logError('picking/iniciar', e); toast(e.message, 'err'); }
+    } catch (e) { logError('picking/abrir', e); toast(e.message || 'No se pudo abrir el alistado.', 'err'); }
   }
   function renderAlistar() {
     view('view-alistar');
+    const h = state.ctx.header;
     el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
+    el('alistar-sub').textContent = `Solicita: ${intNameById(destIntOf(h))}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
     const grid = el('alistar-grid'); grid.innerHTML = '';
     state.ctx.items.forEach((it, i) => {
-      const sol = it.quantity_requested ?? 0;
-      const row = document.createElement('div'); row.className = 'grid-row';
-      row.innerHTML = `<div class="grid-row-head"><b>${itemLabel(it)}</b><small>Solicitada: ${sol}</small></div>
-        <div class="grid-row-body"><input id="ali-${i}" class="num" inputmode="numeric" placeholder="Despachada" /></div>`;
-      grid.appendChild(row);
+      const sol = Number(it.quantity_requested ?? 0);
+      const card = document.createElement('div'); card.className = 'ali-card'; card.id = `ali-card-${i}`;
+      card.innerHTML = `
+        <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" /><b>${itemLabel(it)}</b></label>
+        <div class="oc-card-sub">Solicitada: <b>${sol}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
+        <div class="oc-row2">
+          <div><div class="field-label">Despachada</div><input id="ali-qty-${i}" class="num" inputmode="numeric" value="${sol}" /></div>
+          <div><div class="field-label">Observación</div><input id="ali-obs-${i}" class="txt" placeholder="Opcional…" /></div>
+        </div>`;
+      grid.appendChild(card);
       setTimeout(() => {
-        const input = el(`ali-${i}`); bindNumpad(input);
-        input.addEventListener('input', () => {
-          let v = Number(input.value);
-          if (v > sol) { v = sol; input.value = String(sol); toast('No puede superar lo solicitado.', 'warn'); }
-          it.despachada = v; evalAlistarObs();
+        const q = el(`ali-qty-${i}`), chk = el(`ali-chk-${i}`), obs = el(`ali-obs-${i}`);
+        bindNumpad(q);
+        q.addEventListener('input', () => {
+          let v = Number(q.value);
+          if (v > sol) { v = sol; q.value = String(sol); toast('No puede superar lo solicitado.', 'warn'); }
+          it.despachada = v;
+        });
+        obs.addEventListener('input', () => { it.obs = obs.value; });
+        chk.addEventListener('change', () => {
+          it.done = chk.checked;
+          card.classList.toggle('ali-done', chk.checked);
+          updateAliProgress();
         });
       }, 0);
     });
-    el('alistar-obs-wrap').classList.add('hidden');
+    el('ali-all').checked = false;
+    updateAliProgress();
   }
-  function evalAlistarObs() {
-    const faltante = state.ctx.items.some((it) => it.despachada !== null && it.despachada < (it.quantity_requested ?? 0));
-    el('alistar-obs-wrap').classList.toggle('hidden', !faltante);
+  function updateAliProgress() {
+    const total = state.ctx.items.length;
+    const done = state.ctx.items.filter((it) => it.done).length;
+    el('ali-progress').textContent = `${done}/${total} alistados`;
+    el('alistar-confirm').disabled = total === 0 || done < total;
+  }
+  function toggleAliAll(checked) {
+    state.ctx.items.forEach((it, i) => {
+      it.done = checked;
+      const chk = el(`ali-chk-${i}`); if (chk) chk.checked = checked;
+      const card = el(`ali-card-${i}`); if (card) card.classList.toggle('ali-done', checked);
+    });
+    updateAliProgress();
   }
   async function confirmAlistar() {
     const items = state.ctx.items;
-    if (items.some((it) => it.despachada === null)) { toast('Indica todas las cantidades.', 'warn'); return; }
-    const faltante = items.some((it) => it.despachada < (it.quantity_requested ?? 0));
-    const obs = el('alistar-obs').value.trim();
-    if (faltante && !obs) { toast('Justifica el faltante en observaciones.', 'warn'); return; }
+    if (!items.every((it) => it.done)) { toast('Marca todos los ítems como alistados.', 'warn'); return; }
+    const short = items.find((it) => it.despachada < Number(it.quantity_requested ?? 0) && !it.obs.trim());
+    if (short) { toast('Añade una observación en los ítems con faltante.', 'warn'); return; }
+    const notes = items.filter((it) => it.obs.trim())
+      .map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
-      notes: obs,
-      items: items.map((it) => ({ item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: it.despachada })),
+      notes,
+      items: items.map((it) => {
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: it.despachada };
+        if (it.obs.trim()) o.notes = it.obs.trim();
+        return o;
+      }),
     };
-    await sendTx('picking_alistar', payload, 'Traspaso LISTO_DESPACHO.');
+    await sendTx('picking_alistar', payload, 'Traspaso LISTO_DESPACHO (en tránsito).');
     openPicking();
   }
 
@@ -1185,6 +1263,7 @@ const App = (() => {
     wireSkuSearch('merma-sku-q', 'merma-sku-res', (s) => batchesForSku(s.id, el('merma-batch')));
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));
+    el('ali-all').addEventListener('change', (e) => toggleAliAll(e.target.checked));
     el('cierre-confirm').addEventListener('click', () => confirmCierre().catch(() => {}));
     el('merma-capture').addEventListener('click', captureMerma);
     el('merma-confirm').addEventListener('click', () => confirmMerma().catch(() => {}));

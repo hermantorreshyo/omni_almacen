@@ -353,7 +353,9 @@ switch ($action) {
         requireAuth();
         $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
         if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
-        relay(client()->request('PUT', sprintf($UP['transfer_dispatch'], $id), json_encode(['items' => $in['items'] ?? []], JSON_UNESCAPED_UNICODE), true));
+        $body = ['items' => $in['items'] ?? []];
+        if (!empty($in['notes'])) $body['notes'] = $in['notes'];
+        relay(client()->request('PUT', sprintf($UP['transfer_dispatch'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
     }
     case 'transporte_ruta': {
         requireAuth();
