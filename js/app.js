@@ -679,14 +679,17 @@ const App = (() => {
     finally { setBusy('sol-add', false); }
     if (!lot) {
       toast(restricted ? 'Sin lotes con stock en bodega para este producto.'
-                       : 'Ese SKU no tiene lotes registrados en bodega.', 'warn');
+                       : 'No hay lotes registrados para este producto.', 'warn');
       return;
     }
-    if (restricted) {                                   // solo en modo producción
-      const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
+    const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
+    if (restricted) {                                   // modo producción: bloquear faltante
       if (avail != null && avail < qtyBase) {
-        toast(`Stock insuficiente. Disponible: ${avail}. Se solicitará igualmente.`, 'warn');
+        toast(`Stock insuficiente. Disponible: ${avail}.`, 'err');
+        return;
       }
+    } else if (avail != null && avail <= 0) {           // implantación: informar, no bloquear
+      toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
     }
     state.ctx.items.push({
       item_id: item,
@@ -958,6 +961,12 @@ const App = (() => {
       }
     });
     const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
+    const assignedWrap = document.createElement('div'); assignedWrap.className = 'tp-assigned';
+    const showAssigned = (info) => {
+      const label = [info.route_code, info.plate_number, info.driver_name].filter(Boolean).join(' · ');
+      assignedWrap.innerHTML = label ? `<span class="tp-ok">✓ Asignado a ${label}</span>` : '';
+    };
+    if (t.logistic_route_id || t.route_code) showAssigned(t);   // ya asignado (si el API lo trae)
     if (st === 'LISTO_DESPACHO' || st === 'EN_RUTA') {
       if (!state.rutas || !state.rutas.length) {
         const msg = document.createElement('div'); msg.className = 'tp-noroute';
@@ -967,13 +976,18 @@ const App = (() => {
         const ruta = document.createElement('select'); ruta.className = 'sel';
         ruta.add(new Option('Asignar a ruta…', ''));
         state.rutas.forEach((r) => ruta.add(new Option(rutaLabel(r), r.id)));
+        if (t.logistic_route_id) ruta.value = String(t.logistic_route_id);
         const go = document.createElement('button'); go.className = 'btn-ok-sm'; go.textContent = 'Asignar ruta';
         go.addEventListener('click', async () => {
           if (!ruta.value) { toast('Elige una ruta.', 'warn'); return; }
+          setBusyEl(go, true);
           try {
-            await ApiClient.asignarRuta({ traspaso_id: id, logistic_route_id: Number(ruta.value) });
-            toast('Traspaso asignado a la ruta.', 'ok'); openTransporte();
+            const r = await ApiClient.asignarRuta({ traspaso_id: id, logistic_route_id: Number(ruta.value) });
+            const info = (r && r.data) ? r.data : (state.rutas.find((x) => Number(x.id) === Number(ruta.value)) || {});
+            showAssigned(info);
+            toast('Traspaso asignado a la ruta.', 'ok');
           } catch (e) { logError('transporte/asignar', e); toast(e.message || 'No se pudo asignar.', 'err'); }
+          finally { setBusyEl(go, false); }
         });
         ctrls.append(ruta, go);
       }
@@ -986,7 +1000,7 @@ const App = (() => {
       });
       ctrls.append(goEnt);
     }
-    c.append(seeBtn, det, ctrls);
+    c.append(seeBtn, det, ctrls, assignedWrap);
     return c;
   }
 
@@ -1289,7 +1303,14 @@ const App = (() => {
       if (!rows.length) { res.innerHTML = '<div class="sku-empty">Sin coincidencias</div>'; res.classList.add('open'); return; }
       rows.forEach((s) => {
         const b = document.createElement('button');
-        b.type = 'button'; b.className = 'sku-opt'; b.dataset.id = String(s.id); b.textContent = lblSku(s);
+        b.type = 'button'; b.className = 'sku-opt sku-opt2'; b.dataset.id = String(s.id);
+        const name = document.createElement('span'); name.className = 'sku-opt-n';
+        name.textContent = s.name || s.nombre || ('SKU ' + s.id);
+        b.appendChild(name);
+        if (s.sku_final_code) {
+          const code = document.createElement('span'); code.className = 'sku-opt-c';
+          code.textContent = s.sku_final_code; b.appendChild(code);
+        }
         b.addEventListener('click', () => {
           input.dataset.skuId = String(s.id);
           res.querySelectorAll('.sku-opt').forEach((o) => o.classList.remove('sel'));
@@ -1360,6 +1381,7 @@ const App = (() => {
     const b = el(id); if (!b) return;
     b.disabled = busy; b.dataset.busy = busy ? '1' : '';
   }
+  function setBusyEl(b, busy) { if (b) { b.disabled = busy; b.dataset.busy = busy ? '1' : ''; } }
 
   /* ── Cableado de botones estáticos ────────────────────────────── */
   function wireStatic() {

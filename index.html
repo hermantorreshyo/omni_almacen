@@ -85,6 +85,11 @@
     .dash-row-n { width: 28px; text-align: right; font-weight: 700; color: #642a72; flex: none; }
     .sku-res { display: none; border: 1px solid #e5e7eb; border-radius: 12px; margin-top: 6px; overflow: hidden; background: #fff; max-height: 260px; overflow-y: auto; }
     .sku-res.open { display: block; }
+    #sol-sku-res.open { max-height: 46vh; }
+    .sku-opt2 { display: flex; flex-direction: column; gap: 2px; }
+    .sku-opt-n { font-weight: 600; }
+    .sku-opt-c { font-size: .78rem; color: #6b7280; }
+    .sol-hint { font-size: .78rem; color: #9ca3af; margin: 4px 0 2px; }
     .sku-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid #f1f1f4; background: #fff; font-size: .92rem; cursor: pointer; min-height: 46px; }
     .sku-opt:hover, .sku-opt:active { background: #f3edf5; color: #642a72; }
     .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
@@ -108,11 +113,18 @@
     .ali-all-lbl { font-size: .9rem; color: #374151; }
     .ali-card { background: #fff; border: 1px solid #e5e7eb; border-left: 5px solid #F59E0B; border-radius: 16px; padding: 16px; }
     .ali-card.ali-done { border-left-color: #10B981; background: #f5fbf8; }
+    #view-alistar, #view-cierre { padding-bottom: 84px; }
+    #view-alistar .ali-bar, #view-cierre .ali-bar { position: sticky; top: 0; z-index: 6; background: #f6f4f8; padding: 10px 0; border-bottom: 1px solid #ece8f0; }
+    #alistar-confirm, #cierre-confirm { position: sticky; bottom: 12px; box-shadow: 0 8px 24px rgba(100,42,114,.18); }
+    .ali-card .ali-check b { font-size: 1.05rem; }
+    .ali-card .num { font-size: 1.1rem; font-weight: 700; }
     .chip-amb { background: rgba(245,158,11,.15); color: #a86a06; }
     .tp-sub { color: #6b7280; display: block; margin: 4px 0 8px; }
     .btn-see { padding: 6px 0; font-size: .85rem; color: #642a72; }
     .tp-noroute { font-size: .85rem; color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 8px 12px; }
     .tp-panel-h { font-weight: 700; color: #642a72; margin: 6px 0 10px; }
+    .tp-assigned { margin-top: 8px; }
+    .tp-ok { display: inline-block; background: rgba(16,185,129,.12); color: #0a7d54; font-weight: 700; font-size: .85rem; border-radius: 999px; padding: 5px 12px; }
     .hub-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
     .hub-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #4b5563; }
     .hub-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -279,7 +291,8 @@
       <div class="field-label">Destino (tu tienda)</div>
       <div class="ro-field" id="sol-dest-lbl">—</div>
       <div class="field-label">Añadir ítem</div>
-      <input id="sol-sku-q" class="txt" placeholder="Buscar SKU…" />
+      <input id="sol-sku-q" class="txt" placeholder="Escribe nombre o código para filtrar…" />
+      <div class="sol-hint">Toca un producto de la lista para seleccionarlo.</div>
       <div id="sol-sku-res" class="sku-res"></div>
       <div style="display:flex;gap:10px;margin-top:10px;">
         <input id="sol-cant" class="num" inputmode="decimal" placeholder="Cant." />
