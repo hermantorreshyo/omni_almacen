@@ -678,23 +678,21 @@ const App = (() => {
     } catch (e) { logError('sol/fefo', e); }
     finally { setBusy('sol-add', false); }
     if (!lot) {
-      if (restricted) {                              // producción: exige lote con stock
-        toast('Sin lotes con stock en bodega para este producto.', 'warn'); return;
-      }
-      // Control de inventario DESHABILITADO → registrar igual (sin lote; lo resuelve el API).
+      // El API exige batch_id en transfers; sin lote no se puede crear la solicitud.
+      // (Pendiente: REQ para auto-resolver/crear lote en implantación.)
+      toast('Este producto aún no tiene lotes en el sistema; no puede solicitarse hasta que se registre uno (recepción o inventario inicial).', 'warn');
+      return;
+    }
+    const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
+    if (restricted && avail != null && avail < qtyBase) {
+      toast(`Stock insuficiente. Disponible: ${avail}.`, 'err'); return;   // solo producción bloquea
+    }
+    if (!restricted && avail != null && avail <= 0) {
       toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
-    } else {
-      const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
-      if (restricted && avail != null && avail < qtyBase) {
-        toast(`Stock insuficiente. Disponible: ${avail}.`, 'err'); return;   // solo producción bloquea
-      }
-      if (!restricted && avail != null && avail <= 0) {
-        toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
-      }
     }
     state.ctx.items.push({
       item_id: item,
-      batch_id: lot ? lot.id : null,               // sin lote en implantación → lo resuelve el API
+      batch_id: lot.id,                            // FEFO (incluye lotes con stock 0)
       quantity_requested: qtyBase,
       unit,
       sku_label: label,
@@ -712,11 +710,9 @@ const App = (() => {
       location_id_origin: state.ctx.originLocId,
       location_id_destination: state.ctx.destLocId,
       // interlocutor_id_origin/dest NO se envían: el API los resuelve desde las ubicaciones.
-      items: state.ctx.items.map((it) => {
-        const o = { item_id: it.item_id, item_type: 'sku', quantity_requested: it.quantity_requested };
-        if (it.batch_id) o.batch_id = it.batch_id;    // sin lote → lo resuelve el API (control deshabilitado)
-        return o;
-      }),
+      items: state.ctx.items.map((it) => ({
+        item_id: it.item_id, item_type: 'sku', batch_id: it.batch_id, quantity_requested: it.quantity_requested,
+      })),
       notes: el('sol-notes').value.trim(),
     };
     await sendTx('traspaso_solicitar', payload, 'Solicitud registrada (SOLICITADO).');
