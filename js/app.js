@@ -891,6 +891,7 @@ const App = (() => {
       state.rutas = [...rowsOf(rd.data), ...rowsOf(rt.data)]
         .filter((r) => { if (seenR.has(r.id)) return false; seenR.add(r.id); return true; });
     } catch (e) { logError('transporte/rutas', e); state.rutas = []; }
+    renderRutasPanel();
     try {
       const [listo, enruta] = await Promise.all([
         ApiClient.traspasos('LISTO_DESPACHO').catch(() => ({ data: [] })),
@@ -909,6 +910,34 @@ const App = (() => {
     const base = r.route_code || ('Ruta ' + r.id);
     const extra = [r.plate_number, r.driver_name].filter(Boolean).join(' · ');
     return extra ? `${base} — ${extra}` : base;
+  }
+  // Panel superior: rutas activas con acción de confirmar salida del vehículo.
+  function renderRutasPanel() {
+    const wrap = el('transporte-routes'); if (!wrap) return;
+    wrap.innerHTML = '';
+    const rutas = state.rutas || [];
+    if (!rutas.length) return;
+    const h = document.createElement('div'); h.className = 'tp-panel-h'; h.textContent = 'Rutas activas';
+    wrap.appendChild(h);
+    rutas.forEach((r) => {
+      const st = String(r.status || '').toLowerCase();
+      const card = document.createElement('div'); card.className = 'rowcard col';
+      card.innerHTML = `<div class="rowcard-top"><b>${r.route_code || ('Ruta ' + r.id)}</b>
+        <span class="chip ${st === 'en_transito' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ') || '—'}</span></div>
+        <small class="tp-sub">${[r.plate_number, r.model, r.driver_name].filter(Boolean).join(' · ')}${r.transfers_count != null ? ' · ' + r.transfers_count + ' traspaso(s)' : ''}</small>`;
+      if (st === 'despachado') {
+        const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
+        const go = document.createElement('button'); go.className = 'btn-prim-sm'; go.textContent = 'Confirmar salida';
+        go.addEventListener('click', async () => {
+          try {
+            await ApiClient.rutaActualizar({ route_id: r.id, dispatch_time: new Date().toISOString(), status: 'en_transito' });
+            toast('Salida confirmada. Ruta en tránsito.', 'ok'); openTransporte();
+          } catch (e) { logError('ruta/salida', e); toast(e.message || 'No se pudo confirmar la salida.', 'err'); }
+        });
+        ctrls.appendChild(go); card.appendChild(ctrls);
+      }
+      wrap.appendChild(card);
+    });
   }
   function transporteCard(t) {
     const id = tId(t); const st = tState(t);

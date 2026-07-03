@@ -56,6 +56,9 @@ $UP = [
     'catalog_categories'   => '/catalog/categories',
     'catalog_families'     => '/catalog/families',
     'routes'               => '/logistics/routes',
+    'route_update'         => '/logistics/routes/%d',                 // PUT dispatch_time + status
+    'drivers'              => '/logistics/drivers',                   // GET conductores (rol Repartidor)
+    'vehicles'             => '/logistics/vehicles',                  // GET vehículos
     'stock'                => '/inventory/stock',
     'batches'              => '/inventory/batches',      // GET lotes activos (FEFO)
     'reception'            => '/inventory/reception',    // POST atómico (movement_type:"Compra")
@@ -362,6 +365,24 @@ switch ($action) {
         requireAuth();
         $status = preg_replace('/[^a-z_]/', '', strtolower($_GET['status'] ?? ''));
         relay(client()->request('GET', $UP['routes'] . ($status ? '?status=' . $status : ''), null, true));
+    }
+    case 'conductores': {
+        requireAuth();
+        relay(client()->request('GET', $UP['drivers'], null, true));
+    }
+    case 'vehiculos': {
+        requireAuth();
+        relay(client()->request('GET', $UP['vehicles'], null, true));
+    }
+    case 'ruta_actualizar': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['route_id'] ?? $in['id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'route_id inválido.', 422);
+        $body = [];
+        if (!empty($in['dispatch_time'])) $body['dispatch_time'] = $in['dispatch_time'];
+        if (!empty($in['status']))        $body['status'] = $in['status'];
+        relay(client()->request('PUT', sprintf($UP['route_update'], $id),
+            json_encode($body ?: new stdClass(), JSON_UNESCAPED_UNICODE), true));
     }
     case 'traspaso_asignar_ruta': {
         requireAuth();

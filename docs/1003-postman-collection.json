@@ -779,6 +779,34 @@
           }
         },
         {
+          "name": "Conductores",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=conductores",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "conductores"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Asignar traspaso a ruta",
           "request": {
             "method": "POST",
@@ -807,6 +835,43 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"traspaso_id\": 42,\n  \"logistic_route_id\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Confirmar salida (ruta)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=ruta_actualizar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "ruta_actualizar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"route_id\": 3,\n  \"dispatch_time\": \"2026-07-03T08:30:00\",\n  \"status\": \"en_transito\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
