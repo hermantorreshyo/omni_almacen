@@ -678,22 +678,21 @@ const App = (() => {
     } catch (e) { logError('sol/fefo', e); }
     finally { setBusy('sol-add', false); }
     if (!lot) {
-      toast(restricted ? 'Sin lotes con stock en bodega para este producto.'
-                       : 'No hay lotes registrados para este producto.', 'warn');
-      return;
-    }
-    const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
-    if (restricted) {                                   // modo producción: bloquear faltante
-      if (avail != null && avail < qtyBase) {
-        toast(`Stock insuficiente. Disponible: ${avail}.`, 'err');
-        return;
-      }
-    } else if (avail != null && avail <= 0) {           // implantación: informar, no bloquear
+      if (restricted) { toast('Sin lotes con stock en bodega para este producto.', 'warn'); return; }
+      // Implantación: no bloquear; se registra el pedido sin lote (el API resolverá).
       toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
+    } else {
+      const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
+      if (restricted && avail != null && avail < qtyBase) {
+        toast(`Stock insuficiente. Disponible: ${avail}.`, 'err'); return;   // solo producción bloquea
+      }
+      if (!restricted && avail != null && avail <= 0) {
+        toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
+      }
     }
     state.ctx.items.push({
       item_id: item,
-      batch_id: lot.id,
+      batch_id: lot ? lot.id : null,               // puede ir sin lote en implantación
       quantity_requested: qtyBase,
       unit,
       sku_label: label,
@@ -711,9 +710,11 @@ const App = (() => {
       location_id_origin: state.ctx.originLocId,
       location_id_destination: state.ctx.destLocId,
       // interlocutor_id_origin/dest NO se envían: el API los resuelve desde las ubicaciones.
-      items: state.ctx.items.map((it) => ({
-        item_id: it.item_id, item_type: 'sku', batch_id: it.batch_id, quantity_requested: it.quantity_requested,
-      })),   // batch_id resuelto por FEFO al añadir el ítem (el usuario no elige lote)
+      items: state.ctx.items.map((it) => {
+        const o = { item_id: it.item_id, item_type: 'sku', quantity_requested: it.quantity_requested };
+        if (it.batch_id) o.batch_id = it.batch_id;    // si no hay lote, lo resuelve el API
+        return o;
+      }),
       notes: el('sol-notes').value.trim(),
     };
     await sendTx('traspaso_solicitar', payload, 'Solicitud registrada (SOLICITADO).');
@@ -1185,12 +1186,9 @@ const App = (() => {
     el('merma-razon').value = '';
     el('merma-obs').value = '';
     el('merma-foto-prev').classList.add('hidden');
-    el('merma-confirm').disabled = true;
+    el('merma-confirm').disabled = false;
     bindNumpad(el('merma-cant'));
     resetSkuSearch('merma-sku-q', 'merma-sku-res');
-    fillSelect(el('merma-batch'), [], lblBatch, 'Elige SKU primero…');
-    await ensureCatalogs(['locations']);
-    fillSelect(el('merma-loc'), state.catalogs.locations, lblLoc, 'Ubicación…');
   }
   async function captureMerma() {
     try {
@@ -1198,31 +1196,25 @@ const App = (() => {
       state.ctx.foto = b64;
       const img = el('merma-foto-prev');
       img.src = b64; img.classList.remove('hidden');
-      el('merma-confirm').disabled = false;   // se habilita SOLO con foto
     } catch (e) { logError('merma/foto', e); toast('No se pudo capturar la imagen.', 'err'); }
   }
   async function confirmMerma() {
-    const loc   = Number(el('merma-loc').value);
     const item  = pickedSku('merma-sku-q');
-    const batch = Number(el('merma-batch').value);
     const cant  = Number(el('merma-cant').value);
     const unit  = el('merma-unidad').value;
     const razon = el('merma-razon').value;
     const obs   = el('merma-obs').value.trim();
-    if (!loc || !item || !batch || !cant) { toast('Completa ubicación, SKU, lote y cantidad.', 'warn'); return; }
-    if (!razon) { toast('Selecciona la razón.', 'warn'); return; }
-    if (!obs) { toast('Observaciones obligatorias.', 'warn'); return; }
-    if (!state.ctx.foto) { toast('La fotografía es obligatoria.', 'warn'); return; }
+    if (!item || !cant) { toast('Indica el producto y la cantidad.', 'warn'); return; }
+    if (!razon) { toast('Selecciona el motivo.', 'warn'); return; }
 
+    // location_id y batch_id los resuelve el API (zona_mermas + FEFO).
     const payload = {
-      location_id: loc,
       item_id: item,
       item_type: 'sku',
-      batch_id: batch,
       quantity: Metrology.toBase(cant, unit),
-      reason: `${razon} — ${obs}`,
-      file_data: state.ctx.foto,
+      reason: obs ? `${razon} — ${obs}` : razon,
     };
+    if (state.ctx.foto) payload.file_data = state.ctx.foto;   // evidencia opcional
     await sendTx('merma', payload, 'Merma registrada. Stock decrementado.');
     renderHub();
   }
@@ -1396,7 +1388,7 @@ const App = (() => {
 
     wireSkuSearch('sol-sku-q', 'sol-sku-res', null, { persistent: true });
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
-    wireSkuSearch('merma-sku-q', 'merma-sku-res', (s) => batchesForSku(s.id, el('merma-batch')));
+    wireSkuSearch('merma-sku-q', 'merma-sku-res');
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));
     el('ali-all').addEventListener('change', (e) => toggleAliAll(e.target.checked));

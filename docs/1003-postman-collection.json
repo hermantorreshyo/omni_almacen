@@ -987,7 +987,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"location_id\": 5,\n  \"item_id\": 7,\n  \"item_type\": \"sku\",\n  \"batch_id\": 3,\n  \"quantity\": 500,\n  \"reason\": \"Producto caducado — verificado por encargado\",\n  \"file_data\": null\n}",
+              "raw": "{\n  \"item_id\": 111,\n  \"quantity\": 2,\n  \"reason\": \"Caducidad\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

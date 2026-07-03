@@ -364,13 +364,10 @@
     <section id="view-merma" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Registrar merma</h1>
-      <div class="field-label">Ubicación</div>
-      <select id="merma-loc" class="sel"></select>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Indica producto, cantidad y motivo. La ubicación y el lote los resuelve el sistema.</p>
       <div class="field-label">Producto (SKU)</div>
-      <input id="merma-sku-q" class="txt" placeholder="Buscar SKU…" />
+      <input id="merma-sku-q" class="txt" placeholder="Buscar SKU por nombre o código…" />
       <div id="merma-sku-res" class="sku-res"></div>
-      <div class="field-label">Lote</div>
-      <select id="merma-batch" class="sel"></select>
       <div class="field-label">Cantidad</div>
       <div style="display:flex;gap:10px;">
         <input id="merma-cant" class="num" inputmode="decimal" placeholder="0" />
@@ -379,20 +376,22 @@
           <option value="l">L</option><option value="ml">ml</option>
         </select>
       </div>
-      <div class="field-label">Razón</div>
+      <div class="field-label">Motivo</div>
       <select id="merma-razon" class="sel">
         <option value="">Selecciona…</option>
-        <option value="VENCIMIENTO">VENCIMIENTO</option>
-        <option value="DESPERFECTO">DESPERFECTO</option>
+        <option value="Caducidad">Caducidad</option>
+        <option value="Daño">Daño</option>
+        <option value="Pérdida">Pérdida</option>
+        <option value="Otro">Otro</option>
       </select>
-      <div class="field-label">Observaciones (obligatorio)</div>
-      <textarea id="merma-obs" class="txt" placeholder="Justifica la baja del inventario…"></textarea>
-      <div class="field-label">Evidencia fotográfica (obligatoria)</div>
+      <div class="field-label">Observaciones (opcional)</div>
+      <textarea id="merma-obs" class="txt" placeholder="Detalle adicional…"></textarea>
+      <div class="field-label">Evidencia fotográfica (opcional)</div>
       <div class="cam-wrap hidden"><video id="merma-cam" muted></video></div>
       <img id="merma-foto-prev" class="hidden" style="width:100%;border-radius:14px;margin-bottom:12px;" alt="evidencia" />
       <button id="merma-capture" class="btn-prim">Capturar fotografía</button>
       <div style="height:10px;"></div>
-      <button id="merma-confirm" class="btn-ok" disabled>Registrar merma</button>
+      <button id="merma-confirm" class="btn-ok">Registrar merma</button>
     </section>
 
     <!-- ── GESTOR DE PERMISOS (solo SuperAdmin) ─────────────────── -->
