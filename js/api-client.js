@@ -98,6 +98,7 @@ const ApiClient = (() => {
       _request('login_sede', { method: 'POST', body: { usuario, password, interlocutor_id } }),
     stock:   (params = {})           => _request('stock',   { query: params }),
     batches: (params = {})           => _request('batches', { query: params }),
+    crearLote: (payload)             => _request('batch_crear', { method: 'POST', body: payload }),
 
     /* ── Flujo 1: Recepción ── */
     ocPendientes: (params = {}) => _request('oc_pendientes', { query: params }),

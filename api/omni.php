@@ -294,6 +294,10 @@ switch ($action) {
         $qs = $_GET; unset($qs['action']);
         relay(client()->request('GET', $UP['batches'] . ($qs ? '?' . http_build_query($qs) : ''), null, true));
     }
+    case 'batch_crear': {
+        requireAuth();
+        relay(client()->request('POST', $UP['batches'], json_encode(bodyJson(), JSON_UNESCAPED_UNICODE), true));
+    }
 
     /* ── FLUJO 1: RECEPCIÓN CONTRA OC/ALBARÁN (de [1002]) ───────────────── */
     case 'oc_pendientes': {

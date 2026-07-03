@@ -678,21 +678,33 @@ const App = (() => {
     } catch (e) { logError('sol/fefo', e); }
     finally { setBusy('sol-add', false); }
     if (!lot) {
-      // El API exige batch_id en transfers; sin lote no se puede crear la solicitud.
-      // (Pendiente: REQ para auto-resolver/crear lote en implantación.)
-      toast('Este producto aún no tiene lotes en el sistema; no puede solicitarse hasta que se registre uno (recepción o inventario inicial).', 'warn');
-      return;
-    }
-    const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
-    if (restricted && avail != null && avail < qtyBase) {
-      toast(`Stock insuficiente. Disponible: ${avail}.`, 'err'); return;   // solo producción bloquea
-    }
-    if (!restricted && avail != null && avail <= 0) {
-      toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
+      if (restricted) {                              // producción: exige lote con stock
+        toast('Sin lotes con stock en bodega para este producto.', 'warn'); return;
+      }
+      // Control de stock deshabilitado: el API exige batch_id, así que creamos un
+      // lote PROVISIONAL (como recomienda el API CORE) y lo usamos en el traspaso.
+      try {
+        const nb = await ApiClient.crearLote({
+          item_id: item, item_type: 'sku',
+          batch_reference: 'PROV-' + Date.now(),
+          expiration_date: '2099-12-31', cost_per_unit: 0,
+        });
+        const nid = nb?.data?.id ?? nb?.data?.batch_id ?? null;
+        if (nid) { lot = { id: nid, quantity_available: 0 }; toast('Sin lote registrado: se usará un lote provisional.', 'warn'); }
+      } catch (e) { logError('sol/lote-prov', e); }
+      if (!lot) { toast('No se pudo preparar un lote para este producto. Inténtalo de nuevo.', 'err'); return; }
+    } else {
+      const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
+      if (restricted && avail != null && avail < qtyBase) {
+        toast(`Stock insuficiente. Disponible: ${avail}.`, 'err'); return;   // solo producción bloquea
+      }
+      if (!restricted && avail != null && avail <= 0) {
+        toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
+      }
     }
     state.ctx.items.push({
       item_id: item,
-      batch_id: lot.id,                            // FEFO (incluye lotes con stock 0)
+      batch_id: lot.id,                            // real o provisional; el API siempre recibe batch_id
       quantity_requested: qtyBase,
       unit,
       sku_label: label,
