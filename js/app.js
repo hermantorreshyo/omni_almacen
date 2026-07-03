@@ -1191,6 +1191,7 @@ const App = (() => {
     el('merma-confirm').disabled = false;
     bindNumpad(el('merma-cant'));
     resetSkuSearch('merma-sku-q', 'merma-sku-res');
+    el('merma-sku-q')._skuLoad();
   }
   async function captureMerma() {
     try {
@@ -1330,7 +1331,11 @@ const App = (() => {
       if (q.length < 2) { res.innerHTML = ''; res.classList.remove('open'); return; }
       timer = setTimeout(() => query(q), 250);
     });
-    if (!persistent) input.addEventListener('blur', () => setTimeout(() => res.classList.remove('open'), 180));
+    if (!persistent) {
+      // Evita que al pulsar una opción el input pierda foco y se cierre antes del clic.
+      res.addEventListener('mousedown', (e) => e.preventDefault());
+      input.addEventListener('blur', () => setTimeout(() => res.classList.remove('open'), 180));
+    }
     input._skuLoad = () => query('');     // cargar listado inicial (modo persistente)
   }
   function pickedSku(inputId) { return Number(el(inputId).dataset.skuId || 0); }
@@ -1390,7 +1395,7 @@ const App = (() => {
 
     wireSkuSearch('sol-sku-q', 'sol-sku-res', null, { persistent: true });
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
-    wireSkuSearch('merma-sku-q', 'merma-sku-res');
+    wireSkuSearch('merma-sku-q', 'merma-sku-res', null, { persistent: true });
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));
     el('ali-all').addEventListener('change', (e) => toggleAliAll(e.target.checked));
