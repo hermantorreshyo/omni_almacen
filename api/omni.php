@@ -419,7 +419,13 @@ switch ($action) {
     /* ── FLUJO 4: MERMAS (POST /inventory/scrap con evidencia) ──────────── */
     case 'merma': {
         requireAuth();
-        relay(client()->request('POST', $UP['scrap'], json_encode(bodyJson(), JSON_UNESCAPED_UNICODE), true));
+        $in = bodyJson();
+        $u  = $_SESSION['omni_user'] ?? [];
+        if (empty($in['responsible_user_id'])) {
+            $uid = $u['user_id'] ?? $u['id'] ?? null;
+            if ($uid) $in['responsible_user_id'] = (int) $uid;
+        }
+        relay(client()->request('POST', $UP['scrap'], json_encode($in, JSON_UNESCAPED_UNICODE), true));
     }
 
     /* ── PANTALLAS VISIBLES PARA EL USUARIO ACTUAL ──────────────────────── */
