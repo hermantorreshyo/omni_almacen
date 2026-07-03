@@ -678,8 +678,10 @@ const App = (() => {
     } catch (e) { logError('sol/fefo', e); }
     finally { setBusy('sol-add', false); }
     if (!lot) {
-      if (restricted) { toast('Sin lotes con stock en bodega para este producto.', 'warn'); return; }
-      // Implantación: no bloquear; se registra el pedido sin lote (el API resolverá).
+      if (restricted) {                              // producción: exige lote con stock
+        toast('Sin lotes con stock en bodega para este producto.', 'warn'); return;
+      }
+      // Control de inventario DESHABILITADO → registrar igual (sin lote; lo resuelve el API).
       toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
     } else {
       const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
@@ -692,7 +694,7 @@ const App = (() => {
     }
     state.ctx.items.push({
       item_id: item,
-      batch_id: lot ? lot.id : null,               // puede ir sin lote en implantación
+      batch_id: lot ? lot.id : null,               // sin lote en implantación → lo resuelve el API
       quantity_requested: qtyBase,
       unit,
       sku_label: label,
@@ -712,7 +714,7 @@ const App = (() => {
       // interlocutor_id_origin/dest NO se envían: el API los resuelve desde las ubicaciones.
       items: state.ctx.items.map((it) => {
         const o = { item_id: it.item_id, item_type: 'sku', quantity_requested: it.quantity_requested };
-        if (it.batch_id) o.batch_id = it.batch_id;    // si no hay lote, lo resuelve el API
+        if (it.batch_id) o.batch_id = it.batch_id;    // sin lote → lo resuelve el API (control deshabilitado)
         return o;
       }),
       notes: el('sol-notes').value.trim(),
