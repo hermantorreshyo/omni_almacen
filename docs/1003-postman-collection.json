@@ -599,7 +599,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 5,\n  \"notes\": \"Reposición tienda centro\",\n  \"items\": [\n    {\n      \"item_id\": 111,\n      \"item_type\": \"sku\",\n      \"batch_id\": 19,\n      \"quantity_requested\": 10\n    }\n  ]\n}",
+              "raw": "{\n  \"location_id_origin\": 1,\n  \"location_id_destination\": 5,\n  \"notes\": \"Reposición tienda centro\",\n  \"items\": [\n    {\n      \"item_id\": 111,\n      \"item_type\": \"sku\",\n      \"quantity_requested\": 10\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -653,59 +653,13 @@ const App = (() => {
     const item  = pickedSku('sol-sku-q');
     const cant  = Number(el('sol-cant').value);
     const unit  = el('sol-unidad').value;
-    if (!item || !cant) { toast('Elige un SKU del listado e indica la cantidad.', 'warn'); return; }
+    if (!item) { toast('Selecciona un producto.', 'warn'); return; }
+    if (!(cant > 0)) { toast('La cantidad debe ser mayor a 0.', 'warn'); return; }
     const label = el('sol-sku-res').querySelector('.sku-opt.sel')?.textContent || ('SKU ' + item);
-    const qtyBase = Metrology.toBase(cant, unit);
-    const restricted = stockRestricted();
-    // El API exige batch_id; lo resolvemos por FEFO en la bodega de origen.
-    // Implantación: include_empty=1 (acepta lotes con stock 0, sin avisos).
-    // Producción: solo lotes con stock; bloquea si no hay y avisa si no cubre.
-    let lot = null;
-    setBusy('sol-add', true);
-    try {
-      const params = { item_id: item };
-      if (state.ctx.originLocId) params.location_id = state.ctx.originLocId;
-      if (!restricted) params.include_empty = 1;
-      let lots = rowsOf((await ApiClient.batches(params)).data);
-      // Implantación: si no hay lotes en la bodega de origen, buscar en cualquier
-      // ubicación (los lotes de inventario inicial pueden estar en otra parte).
-      if (!restricted && !lots.length && state.ctx.originLocId) {
-        lots = rowsOf((await ApiClient.batches({ item_id: item, include_empty: 1 })).data);
-      }
-      lots = lots.slice().sort((a, b) =>
-        String(a.expiration_date || a.fecha_caducidad || '').localeCompare(String(b.expiration_date || b.fecha_caducidad || '')));
-      lot = lots[0] || null;
-    } catch (e) { logError('sol/fefo', e); }
-    finally { setBusy('sol-add', false); }
-    if (!lot) {
-      if (restricted) {                              // producción: exige lote con stock
-        toast('Sin lotes con stock en bodega para este producto.', 'warn'); return;
-      }
-      // Control de stock deshabilitado: el API exige batch_id, así que creamos un
-      // lote PROVISIONAL (como recomienda el API CORE) y lo usamos en el traspaso.
-      try {
-        const nb = await ApiClient.crearLote({
-          item_id: item, item_type: 'sku',
-          batch_reference: 'PROV-' + Date.now(),
-          expiration_date: '2099-12-31', cost_per_unit: 0,
-        });
-        const nid = nb?.data?.id ?? nb?.data?.batch_id ?? null;
-        if (nid) { lot = { id: nid, quantity_available: 0 }; toast('Sin lote registrado: se usará un lote provisional.', 'warn'); }
-      } catch (e) { logError('sol/lote-prov', e); }
-      if (!lot) { toast('No se pudo preparar un lote para este producto. Inténtalo de nuevo.', 'err'); return; }
-    } else {
-      const avail = lot.quantity_available != null ? Number(lot.quantity_available) : null;
-      if (restricted && avail != null && avail < qtyBase) {
-        toast(`Stock insuficiente. Disponible: ${avail}.`, 'err'); return;   // solo producción bloquea
-      }
-      if (!restricted && avail != null && avail <= 0) {
-        toast('Stock no disponible en bodega. La solicitud quedará registrada y se atenderá cuando haya existencias.', 'warn');
-      }
-    }
+    // batch_id ya no es necesario: el API resuelve/crea el lote automáticamente.
     state.ctx.items.push({
       item_id: item,
-      batch_id: lot.id,                            // real o provisional; el API siempre recibe batch_id
-      quantity_requested: qtyBase,
+      quantity_requested: Metrology.toBase(cant, unit),
       unit,
       sku_label: label,
     });
@@ -723,8 +677,8 @@ const App = (() => {
       location_id_destination: state.ctx.destLocId,
       // interlocutor_id_origin/dest NO se envían: el API los resuelve desde las ubicaciones.
       items: state.ctx.items.map((it) => ({
-        item_id: it.item_id, item_type: 'sku', batch_id: it.batch_id, quantity_requested: it.quantity_requested,
-      })),
+        item_id: it.item_id, item_type: 'sku', quantity_requested: it.quantity_requested,
+      })),   // batch_id ya no es necesario: el API resuelve/crea el lote
       notes: el('sol-notes').value.trim(),
     };
     await sendTx('traspaso_solicitar', payload, 'Solicitud registrada (SOLICITADO).');
