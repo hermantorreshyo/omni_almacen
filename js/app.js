@@ -957,6 +957,14 @@ const App = (() => {
         ctrls.append(ruta, go);
       }
     }
+    if (st === 'LISTO_DESPACHO') {                // despacho directo sin ruta/chofer
+      const goSend = document.createElement('button'); goSend.className = 'btn-prim-sm'; goSend.textContent = 'Enviar directo (sin ruta)';
+      goSend.addEventListener('click', async () => {
+        await sendTx('traspaso_enviar', { traspaso_id: id }, 'Despachado directo (PENDIENTE_RECEPCION).');
+        openTransporte();
+      });
+      ctrls.append(goSend);
+    }
     if (st === 'EN_RUTA') {                       // marcar entrega física → PENDIENTE_RECEPCION
       const goEnt = document.createElement('button'); goEnt.className = 'btn-prim-sm'; goEnt.textContent = 'ENTREGAR';
       goEnt.addEventListener('click', async () => {

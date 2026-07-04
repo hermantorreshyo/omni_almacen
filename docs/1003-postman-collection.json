@@ -807,6 +807,43 @@
           }
         },
         {
+          "name": "Enviar directo (sin ruta)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/omni.php?action=traspaso_enviar",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "omni.php"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "traspaso_enviar"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"traspaso_id\": 42\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Asignar traspaso a ruta",
           "request": {
             "method": "POST",

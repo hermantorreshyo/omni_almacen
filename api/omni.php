@@ -76,6 +76,7 @@ $UP = [
     'transfer_route'       => '/inventory/transfers/%d/route',        // PUT (legacy)
     'transfer_assign_route'=> '/inventory/transfers/%d/assign-route', // PUT asignar a ruta logística
     'transfer_deliver'     => '/inventory/transfers/%d/deliver',      // PUT
+    'transfer_send'        => '/inventory/transfers/%d/send',         // PUT despacho directo (sin ruta) → PENDIENTE_RECEPCION
     'transfer_close'       => '/inventory/transfers/%d/close',        // PUT
     'roles'            => '/rbac/roles',                        // GET roles operativos
     'perms_1003'       => '/rbac/subsystems/1003/screen-permissions', // GET / PUT mapa de pantallas
@@ -407,6 +408,12 @@ switch ($action) {
         $id = (int) (bodyJson()['traspaso_id'] ?? 0);
         if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
         relay(client()->request('PUT', sprintf($UP['transfer_deliver'], $id), '{}', true));
+    }
+    case 'traspaso_enviar': {
+        requireAuth();
+        $id = (int) (bodyJson()['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_send'], $id), '{}', true));
     }
     case 'traspaso_cerrar': {
         requireAuth();

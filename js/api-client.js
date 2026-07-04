@@ -122,6 +122,7 @@ const ApiClient = (() => {
     asignarRuta:        (payload) => _request('traspaso_asignar_ruta', { method: 'POST', body: payload }),
     transporteRuta:     (payload) => _request('transporte_ruta',     { method: 'POST', body: payload }),
     transporteEntregar: (payload) => _request('transporte_entregar', { method: 'POST', body: payload }),
+    traspasoEnviar:     (payload) => _request('traspaso_enviar',     { method: 'POST', body: payload }),
     traspasoCerrar:     (payload) => _request('traspaso_cerrar',     { method: 'POST', body: payload }),
 
     /* ── Flujo 4: Mermas ── */
