@@ -1028,7 +1028,11 @@ const App = (() => {
       const card = document.createElement('div'); card.className = 'ali-card'; card.id = `cie-card-${i}`;
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="cie-chk-${i}" /><b>${itemLabel(it)}</b></label>
-        <div class="oc-card-sub">Cantidad enviada: <b>${env}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
+        <div class="cie-qty-row">
+          <span class="cie-qty-lbl">Cantidad enviada</span>
+          <span class="cie-qty-big">${env}</span>
+        </div>
+        ${it.batch_reference ? `<div class="oc-card-sub">Lote ${it.batch_reference}</div>` : ''}
         <div class="field-label">Observación / novedad (si hay diferencia o daño)</div>
         <input id="cie-obs-${i}" class="txt" placeholder="Escribe aquí cualquier objeción o novedad…" />`;
       grid.appendChild(card);
