@@ -954,7 +954,7 @@ const App = (() => {
         ruta.add(new Option('Asignar a ruta…', ''));
         state.rutas.forEach((r) => ruta.add(new Option(rutaLabel(r), r.id)));
         if (t.logistic_route_id) ruta.value = String(t.logistic_route_id);
-        const go = document.createElement('button'); go.className = 'btn-ok-sm'; go.textContent = 'Asignar ruta';
+        const go = document.createElement('button'); go.className = 'btn-amber-sm'; go.textContent = 'Asignar ruta';
         go.addEventListener('click', async () => {
           if (!ruta.value) { toast('Elige una ruta.', 'warn'); return; }
           setBusyEl(go, true);
@@ -970,7 +970,7 @@ const App = (() => {
       }
     }
     if (st === 'LISTO_DESPACHO') {                // despacho directo sin ruta/chofer
-      const goSend = document.createElement('button'); goSend.className = 'btn-prim-sm'; goSend.textContent = 'Enviar directo (sin ruta)';
+      const goSend = document.createElement('button'); goSend.className = 'btn-ok-sm'; goSend.textContent = 'ENVIAR';
       goSend.addEventListener('click', async () => {
         await sendTx('traspaso_enviar', { traspaso_id: id }, 'Despachado directo (PENDIENTE_RECEPCION).');
         openTransporte();
@@ -1028,16 +1028,12 @@ const App = (() => {
       const card = document.createElement('div'); card.className = 'ali-card'; card.id = `cie-card-${i}`;
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="cie-chk-${i}" /><b>${itemLabel(it)}</b></label>
-        <div class="oc-card-sub">Enviada: <b>${env}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
-        <div class="oc-row2">
-          <div><div class="field-label">Recibida</div><input id="cie-qty-${i}" class="num" inputmode="numeric" value="${env}" /></div>
-          <div><div class="field-label">Observación</div><input id="cie-obs-${i}" class="txt" placeholder="Opcional…" /></div>
-        </div>`;
+        <div class="oc-card-sub">Cantidad enviada: <b>${env}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
+        <div class="field-label">Observación / novedad (si hay diferencia o daño)</div>
+        <input id="cie-obs-${i}" class="txt" placeholder="Escribe aquí cualquier objeción o novedad…" />`;
       grid.appendChild(card);
       setTimeout(() => {
-        const q = el(`cie-qty-${i}`), chk = el(`cie-chk-${i}`), obs = el(`cie-obs-${i}`);
-        bindNumpad(q);
-        q.addEventListener('input', () => { it.recibida = Number(q.value); });
+        const chk = el(`cie-chk-${i}`), obs = el(`cie-obs-${i}`);
         obs.addEventListener('input', () => { it.obs = obs.value; });
         chk.addEventListener('change', () => {
           it.done = chk.checked; card.classList.toggle('ali-done', chk.checked); updateCieProgress();
@@ -1064,8 +1060,7 @@ const App = (() => {
   async function confirmCierre() {
     const items = state.ctx.items;
     if (!items.every((it) => it.done)) { toast('Marca todos los ítems como revisados.', 'warn'); return; }
-    const diffMissing = items.find((it) => it.recibida !== Number(it.quantity_dispatched ?? it.quantity_requested ?? 0) && !it.obs.trim());
-    if (diffMissing) { toast('Añade observación en los ítems con diferencia.', 'warn'); return; }
+    // La cantidad recibida = enviada (no editable). Las novedades van en observaciones.
     const notes = items.filter((it) => it.obs.trim()).map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
