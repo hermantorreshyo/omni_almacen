@@ -141,6 +141,7 @@ const App = (() => {
     if (_expiring) return;
     _expiring = true;
     el('app-header').classList.add('hidden');
+    closeDrawer();
     state.user = null; state.rol = null; state.screens = null;
     view('view-login');
     toast('Tu sesión expiró. Vuelve a entrar.', 'warn');
@@ -184,7 +185,8 @@ const App = (() => {
 
   /* Fase 3: cabecera, pantallas y hub. */
   async function finishAuth() {
-    el('hdr-user').textContent = state.user.nombre || state.user.username || state.rol || '—';
+    el('hdr-sede').textContent = state.interlocutorName || 'Sede';
+    el('hdr-user').textContent = state.user.username || state.user.nombre || '—';
     el('hdr-rol').textContent  = state.rol || '—';
     el('app-header').classList.remove('hidden');
     await loadParams();
@@ -282,26 +284,27 @@ const App = (() => {
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
   }
+  const MENU_KEYS = ['dashboard', 'gestor_permisos'];   // van al menú hamburguesa, no a tiles
   function renderHub() {
-    const tiles = orderTiles(visibleTiles());
+    const visible = visibleTiles();
+    const tiles = orderTiles(visible.filter((k) => !MENU_KEYS.includes(k)));
+    renderDrawer(visible);
     const wrap = el('hub-tiles');
     wrap.innerHTML = '';
     if (tiles.length === 0 && !isSuperAdmin()) {
       wrap.innerHTML = `<div class="rounded-xl border border-warn/40 bg-warn/10 p-4 text-warn-700">
         Tu rol no tiene pantallas asignadas en este módulo.</div>`;
     }
-    // Leyenda de colores por área (solo las áreas visibles)
     const areasShown = [...new Set(tiles.map((k) => TILE_META[k].area))];
     const legend = el('hub-legend');
     if (legend) {
       legend.innerHTML = areasShown.map((a) =>
         `<span><i style="background:${AREA[a].color}"></i>${AREA[a].label}</span>`).join('');
     }
-    // Las pantallas (incluida gestor_permisos para SuperAdmin) llegan en el array.
     tiles.forEach((key) => {
       const m = TILE_META[key];
       const b = document.createElement('button');
-      b.className = 'tile' + (key === 'gestor_permisos' ? ' tile-admin' : '');
+      b.className = 'tile';
       b.style.borderLeftColor = AREA[m.area].color;
       b.innerHTML = `<span class="tile-t">${m.t}</span><span class="tile-d">${m.d}</span>`;
       b.addEventListener('click', m.go);
@@ -309,6 +312,15 @@ const App = (() => {
     });
     view('view-hub');
   }
+  /* Muestra en el menú los accesos según permisos (dashboard / gestor_permisos). */
+  function renderDrawer(visible) {
+    const v = visible || visibleTiles();
+    const dash = el('drawer-dashboard'), perm = el('drawer-permisos');
+    if (dash) dash.classList.toggle('hidden', !v.includes('dashboard'));
+    if (perm) perm.classList.toggle('hidden', !v.includes('gestor_permisos'));
+  }
+  function openDrawer() { el('app-drawer').classList.remove('hidden'); }
+  function closeDrawer() { el('app-drawer').classList.add('hidden'); }
 
   /* ════════════════════════════════════════════════════════════════
      GESTOR DE PERMISOS · solo SuperAdmin
@@ -1358,6 +1370,12 @@ const App = (() => {
   /* ── Cableado de botones estáticos ────────────────────────────── */
   function wireStatic() {
     el('hdr-logout').addEventListener('click', doLogout);
+    el('hdr-menu-btn').addEventListener('click', openDrawer);
+    el('drawer-overlay').addEventListener('click', closeDrawer);
+    el('drawer-logout').addEventListener('click', () => { closeDrawer(); doLogout(); });
+    el('drawer-hub').addEventListener('click', () => { closeDrawer(); renderHub(); });
+    el('drawer-dashboard').addEventListener('click', () => { closeDrawer(); openDashboard(); });
+    el('drawer-permisos').addEventListener('click', () => { closeDrawer(); openPermisos(); });
     $$('[data-back]').forEach((b) => b.addEventListener('click', renderHub));
     el('oc-save').addEventListener('click', () => saveOC().catch(() => {}));
     el('oc-back').addEventListener('click', () => openRecepcion().catch(() => {}));
