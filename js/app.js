@@ -1180,15 +1180,18 @@ const App = (() => {
     if (!item || !cant) { toast('Indica el producto y la cantidad.', 'warn'); return; }
     if (!razon) { toast('Selecciona el motivo.', 'warn'); return; }
 
+    const consumo = razon === 'PARA_CONSUMO';
+    // Para consumo interno el motivo debe ir EXACTO (el API detecta el caso especial).
     // location_id y batch_id los resuelve el API (zona_mermas + FEFO).
     const payload = {
       item_id: item,
       item_type: 'sku',
       quantity: Metrology.toBase(cant, unit),
-      reason: obs ? `${razon} — ${obs}` : razon,
+      reason: consumo ? 'PARA_CONSUMO' : (obs ? `${razon} — ${obs}` : razon),
     };
     if (state.ctx.foto) payload.file_data = state.ctx.foto;   // evidencia opcional
-    await sendTx('merma', payload, 'Merma registrada. Stock decrementado.');
+    await sendTx('merma', payload,
+      consumo ? 'Consumo interno registrado. Stock movido a COCINA.' : 'Merma registrada. Stock decrementado.');
     renderHub();
   }
 
