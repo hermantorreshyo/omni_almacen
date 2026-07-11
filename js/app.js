@@ -273,9 +273,9 @@ const App = (() => {
   /* Calcula las pantallas operativas visibles para el usuario actual. */
   function visibleTiles() {
     const all = Object.keys(TILE_META);
+    if (isSuperAdmin()) return all;                              // SuperAdmin ve todo (incl. pantallas aún no registradas)
     if (Array.isArray(state.screens)) return state.screens.filter((k) => TILE_META[k]); // el API manda
     if (state.screens === '*') return all;                       // compatibilidad
-    if (isSuperAdmin()) return all;                              // API no respondió → red de seguridad
     return ROLE_TILES[state.rol] || [];                          // fallback local
   }
 
