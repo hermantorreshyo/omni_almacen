@@ -57,6 +57,7 @@ $UP = [
     'catalog_families'     => '/catalog/families',
     'routes'               => '/logistics/routes',
     'route_update'         => '/logistics/routes/%d',                 // PUT dispatch_time + status
+    'route_detail'         => '/logistics/routes/%d',                 // GET route + transfers
     'drivers'              => '/logistics/drivers',                   // GET conductores (rol Repartidor)
     'vehicles'             => '/logistics/vehicles',                  // GET vehículos
     'stock'                => '/inventory/stock',
@@ -378,6 +379,12 @@ switch ($action) {
     case 'vehiculos': {
         requireAuth();
         relay(client()->request('GET', $UP['vehicles'], null, true));
+    }
+    case 'ruta_detalle': {
+        requireAuth();
+        $id = (int) ($_GET['id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'id de ruta inválido.', 422);
+        relay(client()->request('GET', sprintf($UP['route_detail'], $id), null, true));
     }
     case 'ruta_actualizar': {
         requireAuth();

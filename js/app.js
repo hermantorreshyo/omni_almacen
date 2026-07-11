@@ -251,6 +251,7 @@ const App = (() => {
     ubicar:     { t: 'Ubicación por QR',         d: 'Asignar producto a estantería',  area: 'almacen',    go: openUbicar },
     picking:    { t: 'Picking de Traspasos',     d: 'Alistar y despachar pedidos',    area: 'almacen',    go: openPicking },
     transporte: { t: 'Ruta de Transporte',       d: 'Despacho y entrega en destino',  area: 'transporte', go: openTransporte },
+    entregas:   { t: 'Mis Entregas',             d: 'Pedidos de tu ruta · marcar entregado', area: 'transporte', go: openEntregas },
     solicitar:  { t: 'Solicitar Insumos',        d: 'Pedido de traspaso a bodega',    area: 'tienda',     go: openSolicitar },
     recibir:    { t: 'Recepción de Traspaso',    d: 'Verificar y cerrar entrega',     area: 'tienda',     go: openRecibir },
     merma:      { t: 'Registrar Merma',          d: 'Baja con evidencia fotográfica', area: 'mermas',     go: openMerma },
@@ -258,7 +259,7 @@ const App = (() => {
     gestor_permisos: { t: 'Gestor de Permisos',  d: 'Asignar pantallas a roles',      area: 'gestion',    go: openPermisos },
   };
   // Orden de aparición en el home (agrupado por área/rol).
-  const TILE_ORDER = ['recepcion', 'ubicar', 'picking', 'transporte', 'solicitar', 'recibir', 'merma', 'dashboard', 'gestor_permisos'];
+  const TILE_ORDER = ['recepcion', 'ubicar', 'picking', 'transporte', 'entregas', 'solicitar', 'recibir', 'merma', 'dashboard', 'gestor_permisos'];
   /* Detección robusta de SuperAdmin: por rol, por usuario o por id global (=1).
      Resiliente a JWT sin rol (login en sede sin rol asignado). */
   function isSuperAdmin() {
@@ -989,7 +990,82 @@ const App = (() => {
     return c;
   }
 
-  // E) Recepción y cierre — la tienda destino recibe sus pedidos en tránsito.
+  // F) Repartidor: entregas de SUS rutas → marcar entregado (aparece en Recepción).
+  function isMyRoute(r) {
+    const uid = Number(state.user && (state.user.user_id ?? state.user.id));
+    if (r.driver_user_id != null) return Number(r.driver_user_id) === uid;
+    const uname = String(state.user && (state.user.username || state.user.usuario) || '').toLowerCase();
+    const full  = String(state.user && (state.user.nombre || state.user.full_name) || '').toLowerCase();
+    const dn    = String(r.driver_name || '').toLowerCase();
+    if (!dn) return false;
+    return (uname && dn.includes(uname)) || (full && dn === full);
+  }
+  async function openEntregas() {
+    view('view-entregas');
+    await ensureCatalogs(['locations', 'interlocutors']);
+    const list = el('entregas-list'); list.innerHTML = skeleton();
+    let rutas = [];
+    try {
+      const [rd, rt] = await Promise.all([
+        ApiClient.rutasActivas('en_transito').catch(() => ({ data: [] })),
+        ApiClient.rutasActivas('despachado').catch(() => ({ data: [] })),
+      ]);
+      const seen = new Set();
+      rutas = [...rowsOf(rd.data), ...rowsOf(rt.data)]
+        .filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+      // Si el usuario es repartidor, solo sus rutas; si no coincide ninguna, mostrar todas.
+      const mine = rutas.filter(isMyRoute);
+      if (mine.length) rutas = mine;
+    } catch (e) { logError('entregas/rutas', e); }
+    if (!rutas.length) { list.innerHTML = empty('No tienes rutas activas.'); return; }
+    list.innerHTML = '';
+    for (const r of rutas) {
+      const h = document.createElement('div'); h.className = 'tp-panel-h';
+      h.textContent = `${r.route_code || ('Ruta ' + r.id)}${r.plate_number ? ' · ' + r.plate_number : ''}`;
+      list.appendChild(h);
+      let transfers = [];
+      try {
+        const d = await ApiClient.rutaDetalle(r.id);
+        transfers = (d?.data?.transfers) || (d?.data?.traspasos) || [];
+      } catch (e) { logError('entregas/detalle', e); }
+      const pend = transfers.filter((t) => ['EN_RUTA', 'LISTO_DESPACHO'].includes(String(tState(t)).toUpperCase()));
+      if (!pend.length) {
+        const none = document.createElement('div'); none.className = 'tp-noroute';
+        none.textContent = 'Sin entregas pendientes en esta ruta.';
+        list.appendChild(none); continue;
+      }
+      pend.forEach((t) => list.appendChild(entregaCard(t)));
+    }
+  }
+  function entregaCard(t) {
+    const id = tId(t);
+    const c = document.createElement('div'); c.className = 'rowcard col';
+    c.innerHTML = `<div class="rowcard-top"><b>Traspaso #${id}</b>
+      <span class="chip chip-amb">${String(tState(t)).replace(/_/g, ' ')}</span></div>
+      <small class="tp-sub">Entregar en: ${intNameById(destIntOf(t))}</small>`;
+    const det = document.createElement('div'); det.className = 'dash-det hidden';
+    const see = document.createElement('button'); see.className = 'btn-ghost btn-see'; see.textContent = 'Ver contenido';
+    see.addEventListener('click', async () => {
+      det.classList.toggle('hidden');
+      if (!det.dataset.loaded) {
+        det.innerHTML = '<div class="skel"></div>';
+        const items = await transferItems(t); det.dataset.loaded = '1';
+        det.innerHTML = items.length ? items.map((it) =>
+          `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${it.quantity_dispatched ?? it.quantity_requested ?? 0}</b></div>`).join('')
+          : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
+      }
+    });
+    const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
+    const go = document.createElement('button'); go.className = 'btn-ok-sm'; go.textContent = 'MARCAR ENTREGADO';
+    go.addEventListener('click', async () => {
+      // deliver → PENDIENTE_RECEPCION: aparece en Recepción de Traspaso de la tienda.
+      await sendTx('transporte_entregar', { traspaso_id: id }, 'Entregado. La tienda ya puede recibirlo.');
+      openEntregas();
+    });
+    ctrls.append(go);
+    c.append(see, det, ctrls);
+    return c;
+  }
   async function openRecibir() {
     view('view-recibir');
     await ensureCatalogs(['locations', 'interlocutors']);
