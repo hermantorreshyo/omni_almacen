@@ -635,20 +635,32 @@ const App = (() => {
       sel.onchange = () => resolveSolEndpoints();
     } catch (e) { logError('sol/fabricas', e); fillSelect(el('sol-origen'), [], intName, 'Sin fábricas'); }
   }
-  /* Resuelve ubicaciones e interlocutores según la fábrica de origen elegida. */
+  /* Resuelve ubicaciones según la fábrica de origen elegida y la sede de trabajo. */
+  async function locForInterlocutor(intId) {
+    if (!intId) return null;
+    let locs = [];
+    try {
+      const r = await ApiClient.catalog('locations', { interlocutor_id: intId });
+      locs = rowsOf(r.data).filter((l) => Number(l.interlocutor_id) === Number(intId) || !l.interlocutor_id);
+    } catch (e) { logError('sol/locs', e); }
+    if (!locs.length) {                                  // fallback: catálogo general
+      await ensureCatalog('locations');
+      locs = (state.catalogs.locations || []).filter((l) => Number(l.interlocutor_id) === Number(intId));
+    }
+    const pref = (a) => String(a || '').toLowerCase();
+    return locs.find((l) => pref(l.area_type) === 'bodega') || locs[0] || null;
+  }
   async function resolveSolEndpoints() {
-    await ensureCatalog('locations');
     const originIntId = Number(el('sol-origen').value) || (state.ctx.fabricas[0] && state.ctx.fabricas[0].id) || null;
-    const locs = state.catalogs.locations;
-    const originLocs = originIntId ? locs.filter((l) => Number(l.interlocutor_id) === Number(originIntId)) : [];
-    // Preferir la ubicación tipo "bodega" de la fábrica (recomendación API CORE).
-    const oLoc = originLocs.find((l) => String(l.area_type || '').toLowerCase() === 'bodega') || originLocs[0] || null;
-    const dLoc = locs.find((l) => Number(l.interlocutor_id) === Number(state.interlocutor));
+    const destIntId   = state.interlocutor ?? null;
+    const [oLoc, dLoc] = await Promise.all([locForInterlocutor(originIntId), locForInterlocutor(destIntId)]);
     state.ctx.originIntId = originIntId;
+    state.ctx.destIntId   = destIntId;
     state.ctx.originLocId = oLoc ? oLoc.id : null;
     state.ctx.destLocId   = dLoc ? dLoc.id : null;
-    state.ctx.destIntId   = state.interlocutor ?? (dLoc ? dLoc.interlocutor_id : null);
-    el('sol-dest-lbl').textContent = (dLoc && dLoc.interlocutor_name) || state.interlocutorName || ('Interlocutor ' + state.interlocutor);
+    el('sol-dest-lbl').textContent = state.interlocutorName || ('Interlocutor ' + destIntId);
+    if (!oLoc) toast('La fábrica de origen no tiene ubicaciones registradas.', 'warn');
+    if (!dLoc) toast('Tu sede no tiene ubicaciones registradas. Avisa al administrador.', 'warn');
   }
   function intName(i) { return i.commercial_name || i.fiscal_name || i.name || i.nombre || ('Interlocutor ' + i.id); }
   function renderSolItems() {
@@ -993,14 +1005,18 @@ const App = (() => {
   // F) Repartidor: entregas de SUS rutas (filtro por JWT/driver=me) → marcar entregado.
   async function openEntregas() {
     view('view-entregas');
+    await ensureCatalogs(['interlocutors', 'locations']);
     const list = el('entregas-list'); list.innerHTML = skeleton();
+    const STATES = ['EN_RUTA', 'LISTO_DESPACHO'];
     try {
-      const [enruta, listo] = await Promise.all([
-        ApiClient.traspasos('EN_RUTA', { driver: 'me' }).catch(() => ({ data: [] })),
-        ApiClient.traspasos('LISTO_DESPACHO', { driver: 'me' }).catch(() => ({ data: [] })),
-      ]);
+      const calls = [];
+      STATES.forEach((s) => {
+        calls.push(ApiClient.traspasos(s, { driver: 'me' }).catch(() => ({ data: [] })));
+        calls.push(ApiClient.traspasos(s).catch(() => ({ data: [] })));   // el API ya filtra por rol (chofer→sus rutas)
+      });
+      const res = await Promise.all(calls);
       const seen = new Set();
-      const rows = [...rowsOf(enruta.data), ...rowsOf(listo.data)]
+      const rows = res.flatMap((r) => rowsOf(r.data))
         .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
       list.innerHTML = rows.length ? '' : empty('No tienes entregas pendientes.');
       rows.forEach((t) => list.appendChild(entregaCard(t)));
@@ -1026,8 +1042,9 @@ const App = (() => {
     const veh = [t.vehicle_plate, t.vehicle_model].filter(Boolean).join(' · ');
     const head = document.createElement('div');
     head.innerHTML = `
-      <div class="rowcard-top"><b>🚚 ${t.route_code || ('Traspaso #' + id)}</b>
+      <div class="rowcard-top"><b>🚚 Traspaso #${id}</b>
         <span class="chip ${st === 'EN_RUTA' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ')}</span></div>
+      ${t.route_code ? `<div class="ent-ruta-code">${t.route_code}</div>` : ''}
       <div class="ent-route">${t.origin_sede || intNameById(originIntOf(t))} → <b>${t.dest_sede || intNameById(destIntOf(t))}</b>${t.dest_sede_type ? ` <small>(${t.dest_sede_type})</small>` : ''}</div>
       <div class="ent-body">
         ${line('👤', t.driver_name ? 'Conductor: ' + t.driver_name : '')}
