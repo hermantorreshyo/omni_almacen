@@ -340,8 +340,12 @@ switch ($action) {
        El proxy ya está alineado al contrato: al existir las rutas, opera directo. */
     case 'traspasos_listar': {
         requireAuth();
+        $qs = [];
         $state = preg_replace('/[^A-Z_]/', '', strtoupper($_GET['estado'] ?? $_GET['state'] ?? ''));
-        relay(client()->request('GET', $UP['transfers'] . ($state ? '?state=' . $state : ''), null, true));
+        if ($state) $qs['state'] = $state;
+        if (!empty($_GET['driver']))          $qs['driver'] = preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['driver']);
+        if (!empty($_GET['interlocutor_id'])) $qs['interlocutor_id'] = (int) $_GET['interlocutor_id'];
+        relay(client()->request('GET', $UP['transfers'] . ($qs ? '?' . http_build_query($qs) : ''), null, true));
     }
     case 'traspaso_detalle': {
         requireAuth();

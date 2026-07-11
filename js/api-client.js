@@ -110,7 +110,7 @@ const ApiClient = (() => {
     ubicar: (payload) => _request('ubicar', { method: 'POST', body: payload }),
 
     /* ── Flujo 3: Traspaso externo ── */
-    traspasos:          (estado)  => _request('traspasos_listar', { query: estado ? { estado } : {} }),
+    traspasos:          (estado, extra = {}) => _request('traspasos_listar', { query: { ...(estado ? { estado } : {}), ...extra } }),
     traspasoDetalle:    (id)      => _request('traspaso_detalle', { query: { id } }),
     traspasoSolicitar:  (payload) => _request('traspaso_solicitar',  { method: 'POST', body: payload }),
     pickingIniciar:     (payload) => _request('picking_iniciar',     { method: 'POST', body: payload }),

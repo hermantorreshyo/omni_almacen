@@ -925,7 +925,7 @@ const App = (() => {
     const c = document.createElement('div'); c.className = 'rowcard col';
     c.innerHTML = `<div class="rowcard-top"><b>Traspaso #${id}</b>
       <span class="chip ${st === 'EN_RUTA' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ')}</span></div>
-      <small class="tp-sub">Entregar a: ${intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small>`;
+      <small class="tp-sub">Entregar a: ${t.dest_sede || intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}${t.route_code ? ' · ' + t.route_code : ''}</small>`;
     const det = document.createElement('div'); det.className = 'dash-det hidden';
     const seeBtn = document.createElement('button'); seeBtn.className = 'btn-ghost btn-see'; seeBtn.textContent = 'Ver qué entrego';
     seeBtn.addEventListener('click', async () => {
@@ -990,61 +990,43 @@ const App = (() => {
     return c;
   }
 
-  // F) Repartidor: entregas de SUS rutas → marcar entregado (aparece en Recepción).
-  function isMyRoute(r) {
-    const uid = Number(state.user && (state.user.user_id ?? state.user.id));
-    if (r.driver_user_id != null) return Number(r.driver_user_id) === uid;
-    const uname = String(state.user && (state.user.username || state.user.usuario) || '').toLowerCase();
-    const full  = String(state.user && (state.user.nombre || state.user.full_name) || '').toLowerCase();
-    const dn    = String(r.driver_name || '').toLowerCase();
-    if (!dn) return false;
-    return (uname && dn.includes(uname)) || (full && dn === full);
-  }
+  // F) Repartidor: entregas de SUS rutas (filtro por JWT/driver=me) → marcar entregado.
   async function openEntregas() {
     view('view-entregas');
-    await ensureCatalogs(['locations', 'interlocutors']);
     const list = el('entregas-list'); list.innerHTML = skeleton();
-    let rutas = [];
     try {
-      const [rd, rt] = await Promise.all([
-        ApiClient.rutasActivas('en_transito').catch(() => ({ data: [] })),
-        ApiClient.rutasActivas('despachado').catch(() => ({ data: [] })),
+      const [enruta, listo] = await Promise.all([
+        ApiClient.traspasos('EN_RUTA', { driver: 'me' }).catch(() => ({ data: [] })),
+        ApiClient.traspasos('LISTO_DESPACHO', { driver: 'me' }).catch(() => ({ data: [] })),
       ]);
       const seen = new Set();
-      rutas = [...rowsOf(rd.data), ...rowsOf(rt.data)]
-        .filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
-      // Si el usuario es repartidor, solo sus rutas; si no coincide ninguna, mostrar todas.
-      const mine = rutas.filter(isMyRoute);
-      if (mine.length) rutas = mine;
-    } catch (e) { logError('entregas/rutas', e); }
-    if (!rutas.length) { list.innerHTML = empty('No tienes rutas activas.'); return; }
-    list.innerHTML = '';
-    for (const r of rutas) {
-      const h = document.createElement('div'); h.className = 'tp-panel-h';
-      h.textContent = `${r.route_code || ('Ruta ' + r.id)}${r.plate_number ? ' · ' + r.plate_number : ''}`;
-      list.appendChild(h);
-      let transfers = [];
-      try {
-        const d = await ApiClient.rutaDetalle(r.id);
-        transfers = (d?.data?.transfers) || (d?.data?.traspasos) || [];
-      } catch (e) { logError('entregas/detalle', e); }
-      const pend = transfers.filter((t) => ['EN_RUTA', 'LISTO_DESPACHO'].includes(String(tState(t)).toUpperCase()));
-      if (!pend.length) {
-        const none = document.createElement('div'); none.className = 'tp-noroute';
-        none.textContent = 'Sin entregas pendientes en esta ruta.';
-        list.appendChild(none); continue;
-      }
-      pend.forEach((t) => list.appendChild(entregaCard(t)));
-    }
+      const rows = [...rowsOf(enruta.data), ...rowsOf(listo.data)]
+        .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
+      list.innerHTML = rows.length ? '' : empty('No tienes entregas pendientes.');
+      rows.forEach((t) => list.appendChild(entregaCard(t)));
+    } catch (e) { logError('entregas/list', e); list.innerHTML = empty('No tienes entregas pendientes.'); }
   }
   function entregaCard(t) {
-    const id = tId(t);
-    const c = document.createElement('div'); c.className = 'rowcard col';
-    c.innerHTML = `<div class="rowcard-top"><b>Traspaso #${id}</b>
-      <span class="chip chip-amb">${String(tState(t)).replace(/_/g, ' ')}</span></div>
-      <small class="tp-sub">Entregar en: ${intNameById(destIntOf(t))}</small>`;
+    const id = tId(t); const st = String(tState(t)).toUpperCase();
+    const c = document.createElement('div'); c.className = 'rowcard col ent-card';
+    const line = (ic, txt) => txt ? `<div class="ent-line"><span class="ent-ic">${ic}</span><span>${txt}</span></div>` : '';
+    const veh = [t.vehicle_plate, t.vehicle_model].filter(Boolean).join(' · ');
+    const ruta = [t.route_code, t.route_dispatch_time ? fmtDT(t.route_dispatch_time) : ''].filter(Boolean).join(' · ');
+    c.innerHTML = `
+      <div class="rowcard-top"><b>🚚 ${t.route_code || ('Traspaso #' + id)}</b>
+        <span class="chip ${st === 'EN_RUTA' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ')}</span></div>
+      <div class="ent-route">${t.origin_sede || intNameById(originIntOf(t))} → <b>${t.dest_sede || intNameById(destIntOf(t))}</b>${t.dest_sede_type ? ` <small>(${t.dest_sede_type})</small>` : ''}</div>
+      <div class="ent-body">
+        ${line('👤', t.driver_name ? 'Conductor: ' + t.driver_name : '')}
+        ${line('🚐', veh ? 'Vehículo: ' + veh : '')}
+        ${line('🕐', ruta && t.route_dispatch_time ? 'Despacho: ' + fmtDT(t.route_dispatch_time) : '')}
+        ${line('📦', t.origin_qr ? `Origen: ${t.origin_qr}${t.origin_area ? ' (' + t.origin_area + ')' : ''}` : '')}
+        ${line('📬', t.dest_qr ? `Destino: ${t.dest_qr}${t.dest_area ? ' (' + t.dest_area + ')' : ''}` : '')}
+        ${line('📝', t.notes ? 'Notas: ' + t.notes : '')}
+        ${line('🧾', t.created_by_user ? `Creado por: ${t.created_by_user}${t.at_solicitado ? ' · ' + fmtDT(t.at_solicitado) : ''}` : '')}
+      </div>`;
     const det = document.createElement('div'); det.className = 'dash-det hidden';
-    const see = document.createElement('button'); see.className = 'btn-ghost btn-see'; see.textContent = 'Ver contenido';
+    const see = document.createElement('button'); see.className = 'btn-ghost btn-see'; see.textContent = 'Ver detalle';
     see.addEventListener('click', async () => {
       det.classList.toggle('hidden');
       if (!det.dataset.loaded) {
@@ -1078,7 +1060,7 @@ const App = (() => {
       rows.forEach((t) => {
         const c = document.createElement('button'); c.className = 'rowcard';
         c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
-          <small>Desde: ${intNameById(originIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>
+          <small>Desde: ${t.origin_sede || intNameById(originIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>
           <span class="chip chip-amb">EN TRÁNSITO</span>`;
         c.addEventListener('click', () => openCierre(t).catch(() => {}));
         list.appendChild(c);
@@ -1097,7 +1079,7 @@ const App = (() => {
     };
     view('view-cierre');
     el('cierre-title').textContent = `Recepción Traspaso #${tId(t)}`;
-    el('cierre-sub').textContent = `Desde: ${intNameById(originIntOf(header))}${transferDate(header) ? ' · ' + fmtDT(transferDate(header)) : ''}`;
+    el('cierre-sub').textContent = `Desde: ${header.origin_sede || intNameById(originIntOf(header))}${transferDate(header) ? ' · ' + fmtDT(transferDate(header)) : ''}`;
     const grid = el('cierre-grid'); grid.innerHTML = '';
     state.ctx.items.forEach((it, i) => {
       const env = Number(it.quantity_dispatched ?? it.quantity_requested ?? 0);
