@@ -76,7 +76,7 @@ API no responde el mapa, el cliente cae a sus valores por defecto.
 Resiliencia offline mediante **Outbox** (cola FIFO en `localStorage`). Ante error
 fatal no recuperable se activa la **parada de emergencia** (pantalla roja + alarma).
 
-## Contrato del API CORE v6.6.0
+## Contrato del API CORE v6.9
 
 El SDK (`api/OmniCoreClient.php`) **desenvuelve** el sobre canónico
 `{ status, data, message }`. Mapeo de campos reales aplicado en el cliente:

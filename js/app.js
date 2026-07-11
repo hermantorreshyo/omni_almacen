@@ -736,33 +736,48 @@ const App = (() => {
 
   // Picking: solo solicitudes cuyo ORIGEN es mi interlocutor. Incluye SOLICITADO
   // (nuevas) y EN_PICKING (asignadas a mí, reabribles hasta cambiar de estado).
+  const PICKING_STATES = ['SOLICITADO', 'EN_PICKING'];
+  /* Consulta traspasos y NO oculta los errores del API (403 por permisos, etc.). */
+  async function fetchTransfers(states) {
+    const errs = [];
+    const calls = [...states.map((s) => ApiClient.traspasos(s)), ApiClient.traspasos()];
+    const res = await Promise.all(calls.map((p) => p.catch((e) => { errs.push(e); return { data: [] }; })));
+    const seen = new Set();
+    const rows = res.flatMap((r) => rowsOf(r.data))
+      .filter((t) => states.includes(String(tState(t)).toUpperCase()))
+      .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
+    return { rows, errs, allFailed: errs.length === calls.length };
+  }
+  function apiErrorBox(errs) {
+    const e = errs[0] || {};
+    const code = e.code || e.status || '';
+    const denied = String(code).includes('403') || /rbac|permis|denegad/i.test(e.message || '');
+    const msg = denied
+      ? `Tu rol (${state.rol || '—'}) no tiene permiso para consultar traspasos. Pide al SuperAdmin que te asigne esta pantalla en el Gestor de Permisos.`
+      : (e.message || 'No se pudo consultar el API.');
+    return `<div class="err-box">${msg}</div>`;
+  }
   async function openPicking() {
     view('view-picking');
     const list = el('picking-list'); list.innerHTML = skeleton();
     await ensureCatalogs(['locations', 'interlocutors']);
-    try {
-      const [sol, enp] = await Promise.all([
-        ApiClient.traspasos('SOLICITADO').catch(() => ({ data: [] })),
-        ApiClient.traspasos('EN_PICKING').catch(() => ({ data: [] })),
-      ]);
-      const mine = Number(state.interlocutor);
-      const seen = new Set();
-      const rows = [...rowsOf(sol.data), ...rowsOf(enp.data)]
-        .filter((t) => { const o = originIntOf(t); return o == null || o === mine; })   // el API ya filtra por rol
-        .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
-      list.innerHTML = rows.length ? '' : empty('No hay solicitudes para tu almacén.');
-      rows.forEach((t) => {
-        const st = tState(t);
-        const c = document.createElement('button'); c.className = 'rowcard';
-        const badge = st === 'EN_PICKING'
-          ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
-          : '<span class="chip">SOLICITADO</span>';
-        c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
-          <small>Solicita: ${intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>${badge}`;
-        c.addEventListener('click', () => openAlistarFor(t, st !== 'EN_PICKING').catch(() => {}));
-        list.appendChild(c);
-      });
-    } catch (e) { logError('picking/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
+    const { rows, errs, allFailed } = await fetchTransfers(PICKING_STATES);
+    if (allFailed) { logError('picking/list', errs[0]); list.innerHTML = apiErrorBox(errs); return; }
+    const mine = Number(state.interlocutor);
+    const mias = rows.filter((t) => { const o = originIntOf(t); return o == null || o === mine; });
+    if (!mias.length) { list.innerHTML = empty('No hay solicitudes para tu almacén.'); return; }
+    list.innerHTML = '';
+    mias.forEach((t) => {
+      const st = String(tState(t)).toUpperCase();
+      const c = document.createElement('button'); c.className = 'rowcard';
+      const badge = st === 'EN_PICKING'
+        ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
+        : '<span class="chip">SOLICITADO</span>';
+      c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
+        <small>Solicita: ${t.dest_sede || intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>${badge}`;
+      c.addEventListener('click', () => openAlistarFor(t, st !== 'EN_PICKING').catch(() => {}));
+      list.appendChild(c);
+    });
   }
   /* El listado de traspasos no anida ítems; se obtienen del detalle /{id}. */
   async function transferItems(t) {
@@ -885,19 +900,12 @@ const App = (() => {
         .filter((r) => { if (seenR.has(r.id)) return false; seenR.add(r.id); return true; });
     } catch (e) { logError('transporte/rutas', e); state.rutas = []; }
     renderRutasPanel();
-    try {
-      const [listo, enruta] = await Promise.all([
-        ApiClient.traspasos('LISTO_DESPACHO').catch(() => ({ data: [] })),
-        ApiClient.traspasos('EN_RUTA').catch(() => ({ data: [] })),
-      ]);
-      const mine = Number(state.interlocutor);
-      const seen = new Set();
-      const rows = [...rowsOf(listo.data), ...rowsOf(enruta.data)]
-        .filter((t) => { const o = originIntOf(t); return o == null || o === mine; })   // el API ya filtra por rol
-        .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
-      list.innerHTML = rows.length ? '' : empty('No hay pedidos listos para transportar.');
-      rows.forEach((t) => list.appendChild(transporteCard(t)));
-    } catch (e) { logError('transporte/list', e); list.innerHTML = empty('No hay traspasos pendientes.'); }
+    const { rows, errs, allFailed } = await fetchTransfers(['LISTO_DESPACHO', 'EN_RUTA']);
+    if (allFailed) { logError('transporte/list', errs[0]); list.innerHTML = apiErrorBox(errs); return; }
+    const mine = Number(state.interlocutor);
+    const mias = rows.filter((t) => { const o = originIntOf(t); return o == null || o === mine; });
+    list.innerHTML = mias.length ? '' : empty('No hay pedidos listos para transportar.');
+    mias.forEach((t) => list.appendChild(transporteCard(t)));
   }
   function rutaLabel(r) {
     const base = r.route_code || ('Ruta ' + r.id);
@@ -1002,25 +1010,15 @@ const App = (() => {
     return c;
   }
 
-  // F) Repartidor: entregas de SUS rutas (filtro por JWT/driver=me) → marcar entregado.
+  // F) Repartidor: entregas en tránsito de su sede → marcar entregado.
   async function openEntregas() {
     view('view-entregas');
     await ensureCatalogs(['interlocutors', 'locations']);
     const list = el('entregas-list'); list.innerHTML = skeleton();
-    const STATES = ['EN_RUTA', 'LISTO_DESPACHO'];
-    try {
-      const calls = [];
-      STATES.forEach((s) => {
-        calls.push(ApiClient.traspasos(s, { driver: 'me' }).catch(() => ({ data: [] })));
-        calls.push(ApiClient.traspasos(s).catch(() => ({ data: [] })));   // el API ya filtra por rol (chofer→sus rutas)
-      });
-      const res = await Promise.all(calls);
-      const seen = new Set();
-      const rows = res.flatMap((r) => rowsOf(r.data))
-        .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
-      list.innerHTML = rows.length ? '' : empty('No tienes entregas pendientes.');
-      rows.forEach((t) => list.appendChild(entregaCard(t)));
-    } catch (e) { logError('entregas/list', e); list.innerHTML = empty('No tienes entregas pendientes.'); }
+    const { rows, errs, allFailed } = await fetchTransfers(['EN_RUTA', 'LISTO_DESPACHO']);
+    if (allFailed) { logError('entregas/list', errs[0]); list.innerHTML = apiErrorBox(errs); return; }
+    list.innerHTML = rows.length ? '' : empty('No tienes entregas pendientes.');
+    rows.forEach((t) => list.appendChild(entregaCard(t)));
   }
   function entregaCard(t) {
     const id = tId(t);
@@ -1077,20 +1075,19 @@ const App = (() => {
     view('view-recibir');
     await ensureCatalogs(['locations', 'interlocutors']);
     const list = el('recibir-list'); list.innerHTML = skeleton();
-    try {
-      const r = await ApiClient.traspasos('PENDIENTE_RECEPCION');
-      const mine = Number(state.interlocutor);
-      const rows = rowsOf(r.data).filter((t) => { const d = destIntOf(t); return d == null || d === mine; });   // el API ya filtra por rol
-      list.innerHTML = rows.length ? '' : empty('No hay entregas por recibir.');
-      rows.forEach((t) => {
-        const c = document.createElement('button'); c.className = 'rowcard';
-        c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
-          <small>Desde: ${t.origin_sede || intNameById(originIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>
-          <span class="chip chip-amb">EN TRÁNSITO</span>`;
-        c.addEventListener('click', () => openCierre(t).catch(() => {}));
-        list.appendChild(c);
-      });
-    } catch (e) { logError('recibir/list', e); list.innerHTML = empty('No hay entregas por recibir.'); }
+    const { rows, errs, allFailed } = await fetchTransfers(['PENDIENTE_RECEPCION']);
+    if (allFailed) { logError('recibir/list', errs[0]); list.innerHTML = apiErrorBox(errs); return; }
+    const mine = Number(state.interlocutor);
+    const mias = rows.filter((t) => { const d = destIntOf(t); return d == null || d === mine; });
+    list.innerHTML = mias.length ? '' : empty('No hay entregas por recibir.');
+    mias.forEach((t) => {
+      const c = document.createElement('button'); c.className = 'rowcard';
+      c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
+        <small>Desde: ${t.origin_sede || intNameById(originIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>
+        <span class="chip chip-amb">EN TRÁNSITO</span>`;
+      c.addEventListener('click', () => openCierre(t).catch(() => {}));
+      list.appendChild(c);
+    });
   }
   async function openCierre(t) {
     let header = t, items = [];

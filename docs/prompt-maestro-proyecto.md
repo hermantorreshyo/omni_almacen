@@ -1,6 +1,6 @@
 # PROMPT MAESTRO — JOSEPAN 360 · OMNI · [1003] Gestión de Almacenes y Mermas
 ## Documento de arquitectura completa para reconstrucción del subsistema
-### API CORE de referencia: v6.6.0
+### API CORE de referencia: v6.9
 
 ---
 
@@ -9,7 +9,7 @@
 Actúa como **Desarrollador Frontend/Backend Senior** del ecosistema JOSEPAN 360
 (holding de panaderías artesanales en España). Vas a construir **[1003] Gestión
 de Almacenes y Mermas**, una micro-app **stateless** (sin base de datos propia)
-que consume el **OMNI API CORE v6.6.0** en `https://api.omni.josepan.app/api/v1`.
+que consume el **OMNI API CORE v6.9** en `https://api.omni.josepan.app/api/v1`.
 
 **Stack obligatorio (LAMP Vanilla):** PHP 8.1+ (`declare(strict_types=1)`,
 POO/SOLID, PDO), HTML5 + Tailwind (CDN) + Vanilla JS (ES6+). **Sin** Composer,
@@ -37,7 +37,7 @@ cards blancas, marca `#642a72`, mobile-first táctil (targets ≥46px).
 ## ARQUITECTURA
 
 ```
-Navegador (JS) ──fetch same-origin──► api/omni.php ──cURL (Bearer + X-Interlocutor-Id)──► API CORE v6.6.0
+Navegador (JS) ──fetch same-origin──► api/omni.php ──cURL (Bearer + X-Interlocutor-Id)──► API CORE v6.9
 ```
 
 `api/omni.php` enruta por `?action=` y reenvía a los endpoints del API CORE,
@@ -68,11 +68,11 @@ desenvolviendo el sobre. Estructura de ficheros:
 2. **Selección de tienda/bodega**: tras una validación inicial se listan los
    interlocutores; el usuario elige su sede.
 3. **Login real con la sede** → `POST /auth/login` con `{username, password,
-   interlocutor_id}`. **API CORE v6.8 fija el rol del JWT según ese
+   interlocutor_id}`. **API CORE v6.9 fija el rol del JWT según ese
    `interlocutor_id`**, por lo que la sede debe enviarse en el login (no por
    header posterior). Respuesta: `{token, role, interlocutor_id, interlocutor_name, permissions}`.
 4. **Pantallas**: `GET /rbac/subsystems/1003/my-screens` devuelve **siempre un
-   array** de claves (v6.8): el SuperAdmin recibe todas + `gestor_permisos`; el
+   array** de claves (v6.9): el SuperAdmin recibe todas + `gestor_permisos`; el
    resto, las asignadas; vacío si ninguna. El subsistema solo itera el array.
 
 > Implementación: el proxy hace una validación provisional para listar sedes

@@ -33,7 +33,7 @@
 <body>
 <header>
   <h1>Manual Técnico</h1>
-  <p>JOSEPAN 360 · OMNI · [1003] Gestión de Almacenes y Mermas — API CORE v6.6.0</p>
+  <p>JOSEPAN 360 · OMNI · [1003] Gestión de Almacenes y Mermas — API CORE v6.9</p>
 </header>
 <main>
   <nav>
@@ -55,7 +55,7 @@
     <pre><code>Navegador (JS)
    │  fetch same-origin  api/omni.php?action=...
    ▼
-Proxy PHP  ──cURL──►  API CORE v6.6.0  (https://api.omni.josepan.app/api/v1)
+Proxy PHP  ──cURL──►  API CORE v6.9  (https://api.omni.josepan.app/api/v1)
    │  Bearer + X-Interlocutor-Id
    ▼  sobre {status,data,message}  → {ok,data,code}</code></pre>
   </section>
@@ -129,7 +129,7 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
   </section>
 
   <section class="card" id="campos">
-    <h2>6. Mapeo de campos (v6.6.0)</h2>
+    <h2>6. Mapeo de campos (v6.9)</h2>
     <table>
       <tr><th>Recurso</th><th>Campo en API</th><th>Uso en [1003]</th></tr>
       <tr><td rowspan="3">SKUs</td><td class="mono">name</td><td>etiqueta</td></tr>
@@ -167,8 +167,8 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
     <h2>8. RBAC de pantallas</h2>
     <p>En el login [1003] llama <code>mis_pantallas</code> → <code>/my-screens</code>: SuperAdmin recibe <code>"*"</code>; el resto, la lista filtrada por su rol. El SuperAdmin edita el mapa (pantalla → roles) con el <b>Gestor de Permisos</b> (<code>roles_listar</code>, <code>perms_listar</code>, <code>perms_guardar</code>), restringido en el proxy con <code>requireSuperAdmin()</code>. Claves de pantalla: <span class="mono">recepcion, ubicar, picking, transporte, solicitar, recibir, merma, dashboard</span>.</p>
     <h3>Selección de tienda (interlocutor)</h3>
-    <p>Login en dos fases: (1) <code>action=login</code> valida credenciales y lista <code>/catalog/interlocutors</code>; (2) el usuario elige su sede y <code>action=login_sede</code> <b>re-autentica</b> con ese <code>interlocutor_id</code>. <b>API CORE v6.8</b> fija el rol del JWT según la sede del login, por eso se re-autentica (no basta el header). Cambiar de sede exige logout + login. El filtrado perimetral usa <code>X-Interlocutor-Id</code>.</p>
-    <p>En el login [1003] llama <code>mis_pantallas</code> → <code>/my-screens</code>, que (API CORE v6.8) devuelve <b>siempre un array</b> de claves: para el SuperAdmin incluye todas las pantallas + <code>gestor_permisos</code>; para el resto, las asignadas a su rol; vacío si ninguna. El subsistema solo itera el array. Claves de pantalla: <span class="mono">recepcion, ubicar, picking, transporte, solicitar, recibir, merma, dashboard, gestor_permisos</span>.</p>
+    <p>Login en dos fases: (1) <code>action=login</code> valida credenciales y lista <code>/catalog/interlocutors</code>; (2) el usuario elige su sede y <code>action=login_sede</code> <b>re-autentica</b> con ese <code>interlocutor_id</code>. <b>API CORE v6.9</b> fija el rol del JWT según la sede del login, por eso se re-autentica (no basta el header). Cambiar de sede exige logout + login. El filtrado perimetral usa <code>X-Interlocutor-Id</code>.</p>
+    <p>En el login [1003] llama <code>mis_pantallas</code> → <code>/my-screens</code>, que (API CORE v6.9) devuelve <b>siempre un array</b> de claves: para el SuperAdmin incluye todas las pantallas + <code>gestor_permisos</code>; para el resto, las asignadas a su rol; vacío si ninguna. El subsistema solo itera el array. Claves de pantalla: <span class="mono">recepcion, ubicar, picking, transporte, solicitar, recibir, merma, dashboard, gestor_permisos</span>.</p>
     <h3>Catálogo de pantallas (SSOT)</h3>
     <p>El Gestor de Permisos pobla su matriz desde <code>GET /rbac/subsystems/1003/screens</code> (catálogo de claves registradas en el API CORE), intersecado con las pantallas que [1003] sabe renderizar (<code>TILE_META</code>); si el catálogo no responde, usa las locales. Así solo se ofrecen claves válidas (evita 422 al guardar) y una clave nueva (p.ej. <code>dashboard</code>) aparece en cuanto se registra en el API CORE. El alta/baja de claves se hace desde el admin del API CORE o vía curl, no desde [1003].</p>
     <p>Los selectores operativos solo muestran SKUs con <code>status: "active"</code> (filtro <code>?status=active</code> + verificación en cliente). El <b>Panel de traspasos</b> es un informe histórico y muestra la información sin importar el estado del SKU.</p>
@@ -186,6 +186,10 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
     <p><b>Transporte:</b> lista traspasos <code>LISTO_DESPACHO</code> y <code>EN_RUTA</code> cuyo <b>origen</b> es mi sede; cada tarjeta muestra el destino y un detalle expandible ("ver qué entrego") con las cantidades despachadas. Las <b>rutas activas</b> se consultan en <code>GET /logistics/routes?status=despachado|en_transito</code> y el traspaso se asigna con <code>PUT /inventory/transfers/{id}/assign-route</code> <span class="mono">{logistic_route_id}</span>. El paso a <code>EN_RUTA</code> lo marca el administrador sobre la ruta; el transporte puede marcar <code>ENTREGAR</code> (deliver → PENDIENTE_RECEPCION). [1003] confirma la <b>salida del vehículo</b> con <code>PUT /logistics/routes/{id}</code> <span class="mono">{dispatch_time, status:"en_transito"}</span> desde el panel de rutas activas; conductores/vehículos en <code>GET /logistics/drivers</code> y <code>/logistics/vehicles</code>. Si no hay rutas activas, se avisa que contacte al administrador. Para solicitudes sin chofer existe <b>Enviar directo</b> (<code>PUT /inventory/transfers/{id}/send</code>): lleva el traspaso de <code>LISTO_DESPACHO</code> directamente a <code>PENDIENTE_RECEPCION</code> sin ruta. <b>Recepción (Paso 4):</b> la tienda destino ve solo sus pedidos en tránsito (filtro por <code>interlocutor_id_dest</code>); UI estilo picking: por ítem muestra la <b>cantidad enviada</b> (quantity_dispatched), campo de <b>recibida</b> (prefijado a lo enviado, editable), <b>observación</b> y <b>check</b>; contador y "marcar todos"; diferencias exigen observación. Al cerrar: <code>PUT /close</code> con <code>reception_date</code> y <code>items[{...,quantity_received,notes?}]</code> → CERRADO y stock al destino.</p>
         <h3>Mis Entregas (repartidor)</h3>
     <p>Pantalla <code>entregas</code>: el chofer ve los pedidos de <b>sus rutas</b> activas (<code>GET /logistics/routes?status=en_transito|despachado</code>, filtradas por <code>driver_user_id</code>/<code>driver_name</code>) y su contenido vía <code>GET /logistics/routes/{id}</code> (<span class="mono">route + transfers</span>). Con <b>MARCAR ENTREGADO</b> ejecuta <code>PUT /inventory/transfers/{id}/deliver</code> → el traspaso pasa a <code>PENDIENTE_RECEPCION</code> y aparece en <b>Recepción de Traspaso</b> de la tienda destino.</p>
+    <h3>Visibilidad de traspasos (v6.9)</h3>
+    <p>El filtro perimetral del API es por <b>sede</b>: cada usuario ve solo los traspasos donde su sede (X-Interlocutor-Id) es <b>origen o destino</b>. Además, las <b>pantallas conceden permisos de API implícitamente</b>: si el rol no tiene asignada una pantalla, no obtiene sus permisos (p.ej. <code>inventory.read</code>) y el listado devuelve <b>403</b>. Por eso las bandejas ya no ocultan los errores: muestran un aviso indicando que el rol carece de permisos y que debe asignarse la pantalla en el Gestor de Permisos.</p>
+    <h3>Rol vs interlocutor (v6.9)</h3>
+    <p>El rol es del <b>usuario</b> y no se filtra por <code>interlocutor_id</code>: al entrar con cualquier sede el usuario obtiene siempre las mismas pantallas y permisos. El interlocutor es solo el contexto de trabajo (perímetro de datos).</p>
 <h3>Picking (Paso 3)</h3>
     <p>La bandeja de picking muestra solo traspasos cuyo <b>origen</b> es el interlocutor autenticado (filtro por <code>interlocutor_id_origin</code>), en estados <code>SOLICITADO</code> (nuevos) y <code>EN_PICKING</code> (asignados, reabribles hasta cambiar de estado). Al abrir uno nuevo se hace <code>PUT /picking</code> (asignación); reabrir uno EN_PICKING no re-inicia. El detalle muestra fecha e interlocutor solicitante. Cada línea tiene <b>cantidad despachada</b> (prefijada a lo solicitado), <b>observación</b> y un <b>check "alistado"</b>; hay contador de progreso y "marcar todos". El botón <code>LISTO_DESPACHO</code> se habilita solo cuando todas las líneas están marcadas; los faltantes exigen observación. El despacho envía <code>items[{item_id,batch_id,quantity_dispatched,notes?}]</code> + <code>notes</code> agregadas.</p>
     <h3>Cabecera y menú (estilo [1004])</h3>
@@ -218,6 +222,6 @@ bash setup.sh           # genera .env y verifica PHP 8.1+ y cURL
     <p>El cliente tipa los errores (NETWORK/UNAUTHORIZED/RBAC/VALIDATION/CONFLICT/SERVER). Ante error fatal no recuperable se activa la parada de emergencia y la cola Outbox se detiene.</p>
   </section>
 </main>
-<footer>JOSEPAN 360 · OMNI · [1003] — Manual técnico · API CORE v6.6.0</footer>
+<footer>JOSEPAN 360 · OMNI · [1003] — Manual técnico · API CORE v6.9</footer>
 </body>
 </html>
