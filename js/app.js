@@ -748,7 +748,7 @@ const App = (() => {
       const mine = Number(state.interlocutor);
       const seen = new Set();
       const rows = [...rowsOf(sol.data), ...rowsOf(enp.data)]
-        .filter((t) => originIntOf(t) === mine)
+        .filter((t) => { const o = originIntOf(t); return o == null || o === mine; })   // el API ya filtra por rol
         .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
       list.innerHTML = rows.length ? '' : empty('No hay solicitudes para tu almacén.');
       rows.forEach((t) => {
@@ -893,7 +893,7 @@ const App = (() => {
       const mine = Number(state.interlocutor);
       const seen = new Set();
       const rows = [...rowsOf(listo.data), ...rowsOf(enruta.data)]
-        .filter((t) => originIntOf(t) === mine)
+        .filter((t) => { const o = originIntOf(t); return o == null || o === mine; })   // el API ya filtra por rol
         .filter((t) => { const id = tId(t); if (seen.has(id)) return false; seen.add(id); return true; });
       list.innerHTML = rows.length ? '' : empty('No hay pedidos listos para transportar.');
       rows.forEach((t) => list.appendChild(transporteCard(t)));
@@ -1080,7 +1080,7 @@ const App = (() => {
     try {
       const r = await ApiClient.traspasos('PENDIENTE_RECEPCION');
       const mine = Number(state.interlocutor);
-      const rows = rowsOf(r.data).filter((t) => destIntOf(t) === mine);   // solo lo que YO pedí
+      const rows = rowsOf(r.data).filter((t) => { const d = destIntOf(t); return d == null || d === mine; });   // el API ya filtra por rol
       list.innerHTML = rows.length ? '' : empty('No hay entregas por recibir.');
       rows.forEach((t) => {
         const c = document.createElement('button'); c.className = 'rowcard';
