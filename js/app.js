@@ -1007,36 +1007,45 @@ const App = (() => {
     } catch (e) { logError('entregas/list', e); list.innerHTML = empty('No tienes entregas pendientes.'); }
   }
   function entregaCard(t) {
-    const id = tId(t); const st = String(tState(t)).toUpperCase();
+    const id = tId(t);
     const c = document.createElement('div'); c.className = 'rowcard col ent-card';
+    renderEntregaCard(c, t, id);
+    // Si el listado no trae los campos enriquecidos, completarlos desde el detalle.
+    if (t.dest_sede == null && t.driver_name == null) {
+      ApiClient.traspasoDetalle(id).then((r) => {
+        const h = r?.data?.transfer || r?.data || {};
+        renderEntregaCard(c, { ...t, ...h }, id);
+      }).catch((e) => logError('entregas/detalle', e));
+    }
+    return c;
+  }
+  function renderEntregaCard(c, t, id) {
+    c.innerHTML = '';
+    const st = String(tState(t)).toUpperCase();
     const line = (ic, txt) => txt ? `<div class="ent-line"><span class="ent-ic">${ic}</span><span>${txt}</span></div>` : '';
     const veh = [t.vehicle_plate, t.vehicle_model].filter(Boolean).join(' · ');
-    const ruta = [t.route_code, t.route_dispatch_time ? fmtDT(t.route_dispatch_time) : ''].filter(Boolean).join(' · ');
-    c.innerHTML = `
+    const head = document.createElement('div');
+    head.innerHTML = `
       <div class="rowcard-top"><b>🚚 ${t.route_code || ('Traspaso #' + id)}</b>
         <span class="chip ${st === 'EN_RUTA' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ')}</span></div>
       <div class="ent-route">${t.origin_sede || intNameById(originIntOf(t))} → <b>${t.dest_sede || intNameById(destIntOf(t))}</b>${t.dest_sede_type ? ` <small>(${t.dest_sede_type})</small>` : ''}</div>
       <div class="ent-body">
         ${line('👤', t.driver_name ? 'Conductor: ' + t.driver_name : '')}
         ${line('🚐', veh ? 'Vehículo: ' + veh : '')}
-        ${line('🕐', ruta && t.route_dispatch_time ? 'Despacho: ' + fmtDT(t.route_dispatch_time) : '')}
+        ${line('🕐', t.route_dispatch_time ? 'Despacho: ' + fmtDT(t.route_dispatch_time) : '')}
         ${line('📦', t.origin_qr ? `Origen: ${t.origin_qr}${t.origin_area ? ' (' + t.origin_area + ')' : ''}` : '')}
         ${line('📬', t.dest_qr ? `Destino: ${t.dest_qr}${t.dest_area ? ' (' + t.dest_area + ')' : ''}` : '')}
         ${line('📝', t.notes ? 'Notas: ' + t.notes : '')}
         ${line('🧾', t.created_by_user ? `Creado por: ${t.created_by_user}${t.at_solicitado ? ' · ' + fmtDT(t.at_solicitado) : ''}` : '')}
       </div>`;
-    const det = document.createElement('div'); det.className = 'dash-det hidden';
-    const see = document.createElement('button'); see.className = 'btn-ghost btn-see'; see.textContent = 'Ver detalle';
-    see.addEventListener('click', async () => {
-      det.classList.toggle('hidden');
-      if (!det.dataset.loaded) {
-        det.innerHTML = '<div class="skel"></div>';
-        const items = await transferItems(t); det.dataset.loaded = '1';
-        det.innerHTML = items.length ? items.map((it) =>
-          `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${it.quantity_dispatched ?? it.quantity_requested ?? 0}</b></div>`).join('')
-          : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
-      }
-    });
+    c.appendChild(head);
+    const det = document.createElement('div'); det.className = 'dash-det';
+    det.innerHTML = '<div class="skel"></div>';
+    transferItems(t).then((items) => {                       // contenido siempre visible
+      det.innerHTML = items.length ? items.map((it) =>
+        `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${it.quantity_dispatched ?? it.quantity_requested ?? 0}</b></div>`).join('')
+        : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
+    }).catch(() => { det.innerHTML = '<div class="dash-det-row"><span>Sin ítems.</span></div>'; });
     const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
     const go = document.createElement('button'); go.className = 'btn-ok-sm'; go.textContent = 'MARCAR ENTREGADO';
     go.addEventListener('click', async () => {
@@ -1045,8 +1054,7 @@ const App = (() => {
       openEntregas();
     });
     ctrls.append(go);
-    c.append(see, det, ctrls);
-    return c;
+    c.append(det, ctrls);
   }
   async function openRecibir() {
     view('view-recibir');
