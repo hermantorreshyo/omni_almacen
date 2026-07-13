@@ -942,7 +942,8 @@ const App = (() => {
         <div class="oc-row2">
           <div><div class="field-label">Despachada</div><input id="ali-qty-${i}" class="num" inputmode="numeric" value="${sol}" /></div>
           <div><div class="field-label">Observación</div><input id="ali-obs-${i}" class="txt" placeholder="Opcional…" /></div>
-        </div>`;
+        </div>
+        <button id="ali-zero-${i}" class="btn-zero">Sin stock (0)</button>`;
       grid.appendChild(card);
       setTimeout(() => {
         const q = el(`ali-qty-${i}`), chk = el(`ali-chk-${i}`), obs = el(`ali-obs-${i}`);
@@ -950,9 +951,13 @@ const App = (() => {
         q.addEventListener('input', () => {
           let v = Number(q.value);
           if (v > sol) { v = sol; q.value = String(sol); toast('No puede superar lo solicitado.', 'warn'); }
-          it.despachada = v;
+          it.despachada = Math.max(0, v);          // 0 permitido: ítem sin existencias
         });
         obs.addEventListener('input', () => { it.obs = obs.value; });
+        el(`ali-zero-${i}`).addEventListener('click', () => {   // atajo: sin existencias
+          it.despachada = 0; q.value = '0';
+          if (!obs.value.trim()) { obs.value = 'Sin stock'; it.obs = 'Sin stock'; }
+        });
         chk.addEventListener('change', () => {
           it.done = chk.checked;
           card.classList.toggle('ali-done', chk.checked);
@@ -983,30 +988,24 @@ const App = (() => {
     const short = items.find((it) => it.despachada < Number(it.quantity_requested ?? 0) && !it.obs.trim());
     if (short) { toast('Añade una observación en los ítems con faltante.', 'warn'); return; }
 
-    // Ítems sin existencias (0). El API exige quantity_dispatched > 0, así que se
-    // excluyen del payload y se dejan registrados en las observaciones del traspaso.
-    // (Pendiente: REQ al API CORE para aceptar 0 con inventory_restriction=false.)
+    // El API acepta quantity_dispatched = 0 (ítem sin existencias): se envían TODOS
+    // los ítems con su cantidad real para no perder el "pedido no atendido".
     const ceros = items.filter((it) => Number(it.despachada) <= 0);
-    const conStock = items.filter((it) => Number(it.despachada) > 0);
-    if (!conStock.length) {
-      toast('No puedes despachar el traspaso con todos los ítems en cero. Avisa al solicitante.', 'err');
-      return;
-    }
     const notas = [
       ...items.filter((it) => it.obs.trim()).map((it) => `${itemLabel(it)}: ${it.obs.trim()}`),
-      ...ceros.map((it) => `SIN STOCK (0 despachado): ${itemLabel(it)}`),
+      ...ceros.filter((it) => !it.obs.trim()).map((it) => `SIN STOCK: ${itemLabel(it)}`),
     ].join(' | ');
 
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
       notes: notas,
-      items: conStock.map((it) => {
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: it.despachada };
+      items: items.map((it) => {
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: Number(it.despachada) || 0 };
         if (it.obs.trim()) o.notes = it.obs.trim();
         return o;
       }),
     };
-    if (ceros.length) toast(`${ceros.length} ítem(s) sin stock quedan registrados como no despachados.`, 'warn');
+    if (ceros.length) toast(`${ceros.length} ítem(s) se despachan en 0 (sin stock).`, 'warn');
     await sendTx('picking_alistar', payload, 'Traspaso LISTO_DESPACHO (en tránsito).');
     openPicking();
   }
