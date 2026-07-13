@@ -612,6 +612,9 @@ const App = (() => {
     resetSkuSearch('sol-sku-q', 'sol-sku-res');
     bindNumpad(el('sol-cant'));
     el('sol-dest-lbl').textContent = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
+    const tsel = el('sol-sku-tipo');
+    if (!tsel.options.length) SKU_TYPES.forEach((t) => tsel.add(new Option(t.t, t.v)));
+    tsel.value = '';
     fillSelect(el('sol-origen'), [], intName, 'Cargando fábricas…');
     renderSolItems();
     el('sol-sku-q')._skuLoad();            // muestra el listado de SKUs activos
@@ -1348,12 +1351,22 @@ const App = (() => {
     } catch (e) { logError('batches/sku', e); fillSelect(sel, [], lblBatch, 'Sin lotes'); }
   }
 
+  const SKU_TYPES = [
+    { v: '',   t: 'Todas las categorías' },
+    { v: 'MP', t: 'MP · Materia prima' },
+    { v: 'CD', t: 'CD · Consumo directo' },
+    { v: 'PN', t: 'PN · Producto no fabricado' },
+    { v: 'PT', t: 'PT · Producto terminado' },
+  ];
   /* Buscador de SKU (typeahead) — necesario con ~1000 SKUs activos.
      opts.persistent=true: muestra siempre el listado y la búsqueda lo filtra.
-     Guarda el id elegido en input.dataset.skuId. onPick recibe el SKU. */
+     opts.typeSelectId: <select> de categoría (item_type).
+     Nota: para [1003] el API excluye item_type=PT por defecto; para ver TODAS las
+     categorías se consulta también ?item_type=PT y se fusiona. */
   function wireSkuSearch(inputId, resultsId, onPick, opts = {}) {
     const input = el(inputId), res = el(resultsId);
     const persistent = !!opts.persistent;
+    const typeSel = opts.typeSelectId ? el(opts.typeSelectId) : null;
     let timer = null;
     input.autocomplete = 'off';
     input.dataset.skuId = '';
@@ -1366,9 +1379,10 @@ const App = (() => {
         const name = document.createElement('span'); name.className = 'sku-opt-n';
         name.textContent = s.name || s.nombre || ('SKU ' + s.id);
         b.appendChild(name);
-        if (s.sku_final_code) {
+        const meta = [s.sku_final_code, s.item_type].filter(Boolean).join(' · ');
+        if (meta) {
           const code = document.createElement('span'); code.className = 'sku-opt-c';
-          code.textContent = s.sku_final_code; b.appendChild(code);
+          code.textContent = meta; b.appendChild(code);
         }
         b.addEventListener('click', () => {
           input.dataset.skuId = String(s.id);
@@ -1382,9 +1396,25 @@ const App = (() => {
       res.classList.add('open');
     };
     const query = async (q) => {
+      const type = typeSel ? typeSel.value : '';
+      const base = { status: 'active', limit: 200 };
+      if (q) base.q = q;
       try {
-        const r = await ApiClient.catalog('skus', { q, status: 'active', limit: 50 });
-        render(rowsOf(r.data).filter((s) => (s.status ?? 'active') === 'active'));
+        let rows;
+        if (type) {
+          rows = rowsOf((await ApiClient.catalog('skus', { ...base, item_type: type })).data);
+        } else {
+          const [gen, pt] = await Promise.all([   // sin item_type el API omite PT
+            ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
+            ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
+          ]);
+          const seen = new Set();
+          rows = [...rowsOf(gen.data), ...rowsOf(pt.data)]
+            .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
+        }
+        rows = rows.filter((s) => (s.status ?? 'active') === 'active')
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+        render(rows);
       } catch (e) { logError('sku/search', e); }
     };
     input.addEventListener('input', () => {
@@ -1395,6 +1425,7 @@ const App = (() => {
       if (q.length < 2) { res.innerHTML = ''; res.classList.remove('open'); return; }
       timer = setTimeout(() => query(q), 250);
     });
+    if (typeSel) typeSel.addEventListener('change', () => query(input.value.trim()));
     if (!persistent) {
       // Evita que al pulsar una opción el input pierda foco y se cierre antes del clic.
       res.addEventListener('mousedown', (e) => e.preventDefault());
@@ -1463,7 +1494,7 @@ const App = (() => {
     el('sol-add').addEventListener('click', () => addSolItem().catch(() => {}));
     // Buscadores de SKU (typeahead). Ubicar/merma recargan lotes al elegir.
 
-    wireSkuSearch('sol-sku-q', 'sol-sku-res', null, { persistent: true });
+    wireSkuSearch('sol-sku-q', 'sol-sku-res', null, { persistent: true, typeSelectId: 'sol-sku-tipo' });
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
     wireSkuSearch('merma-sku-q', 'merma-sku-res', null, { persistent: true });
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));

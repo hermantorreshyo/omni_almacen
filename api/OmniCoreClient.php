@@ -106,6 +106,7 @@ final class OmniCoreClient
             if ($this->interlocutorId !== null) {
                 $headers[] = 'X-Interlocutor-Id: ' . $this->interlocutorId;
             }
+            $headers[] = 'X-Subsystem-Id: 1003';   // identifica el subsistema (visibilidad de catálogo)
         }
 
         curl_setopt_array($ch, [
