@@ -148,6 +148,20 @@
     .sol-total small { font-size:.6rem; font-weight:800; color:#9ca3af; letter-spacing:.06em; }
     .sol-cta { flex:1; min-height:56px; border:0; border-radius:14px; background:#10B981; color:#fff; font-weight:800; font-size:.95rem; letter-spacing:.03em; cursor:pointer; box-shadow:0 8px 22px rgba(16,185,129,.30); }
     .sol-cta:disabled { background:#cbd5e1; box-shadow:none; cursor:default; }
+    /* ── Mermas (mismo sistema visual, acento rojo) ── */
+    .merma-ctx .sol-ctx-h { color:#EF4444; }
+    .merma-ctx .sol-ctx-c em { color:#b91c1c; background:rgba(239,68,68,.10); }
+    .mrm-note { font-size:.76rem; color:#9ca3af; margin:10px 0 0; }
+    #view-merma .sol-card.picked { border-color:#EF4444; box-shadow:0 6px 18px rgba(239,68,68,.14); }
+    #view-merma .stp-btn.plus { background:#EF4444; box-shadow:0 4px 10px rgba(239,68,68,.28); }
+    #view-merma .chip-f.on { background:#EF4444; border-color:#EF4444; box-shadow:0 4px 12px rgba(239,68,68,.28); }
+    #view-merma .sol-total b { color:#b91c1c; }
+    .mrm-cta { background:#EF4444; box-shadow:0 8px 22px rgba(239,68,68,.30); }
+    .mrm-cta:disabled { background:#cbd5e1; box-shadow:none; }
+    .mrm-motivos .chip-f.on { background:#642a72; border-color:#642a72; box-shadow:0 4px 12px rgba(100,42,114,.26); }
+    .mrm-foto { margin-top: 12px; }
+    .mrm-foto-btn { width:100%; border:1px dashed #e5e7eb; border-radius:12px; min-height:44px; color:#642a72; font-weight:700; font-size:.84rem; }
+    #mrm-foto-prev { width:100%; border-radius:12px; margin-top:10px; }
     .sku-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid #f1f1f4; background: #fff; font-size: .92rem; cursor: pointer; min-height: 46px; }
     .sku-opt:hover, .sku-opt:active { background: #f3edf5; color: #642a72; }
     .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
@@ -502,37 +516,50 @@
 
     <!-- ── FLUJO 4: MERMA ───────────────────────────────────────── -->
     <section id="view-merma" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Registrar merma</h1>
-      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Indica producto, cantidad y motivo. La ubicación y el lote los resuelve el sistema.</p>
-      <div class="field-label">Producto (SKU)</div>
-      <input id="merma-sku-q" class="txt" placeholder="Buscar SKU por nombre o código…" />
-      <div id="merma-sku-res" class="sku-res"></div>
-      <div class="field-label">Cantidad</div>
-      <div style="display:flex;gap:10px;">
-        <input id="merma-cant" class="num" inputmode="decimal" placeholder="0" />
-        <select id="merma-unidad" class="sel" style="max-width:120px;">
-          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
-          <option value="l">L</option><option value="ml">ml</option>
-        </select>
+      <button data-back class="btn-ghost" style="margin-bottom:12px;">← Volver</button>
+
+      <div class="sol-ctx merma-ctx">
+        <div class="sol-ctx-h">REGISTRO DE MERMAS</div>
+        <div class="sol-ctx-grid">
+          <div class="sol-ctx-c"><span>USUARIO</span><b id="mrm-ctx-user">—</b></div>
+          <div class="sol-ctx-c"><span>INTERLOCUTOR</span><b id="mrm-ctx-int">—</b></div>
+          <div class="sol-ctx-c"><span>ROL DE ACCESO</span><em id="mrm-ctx-rol">—</em></div>
+        </div>
+        <p class="mrm-note">La ubicación y el lote los resuelve el sistema automáticamente.</p>
       </div>
-      <div class="field-label">Motivo</div>
-      <select id="merma-razon" class="sel">
-        <option value="">Selecciona…</option>
-        <option value="Caducidad">Caducidad</option>
-        <option value="Deterioro">Deterioro</option>
-        <option value="Error de producción">Error de producción</option>
-        <option value="PARA_CONSUMO">Para consumo interno</option>
-        <option value="Otro">Otro</option>
-      </select>
-      <div class="field-label">Observaciones (opcional)</div>
-      <textarea id="merma-obs" class="txt" placeholder="Detalle adicional…"></textarea>
-      <div class="field-label">Evidencia fotográfica (opcional)</div>
-      <div class="cam-wrap hidden"><video id="merma-cam" muted></video></div>
-      <img id="merma-foto-prev" class="hidden" style="width:100%;border-radius:14px;margin-bottom:12px;" alt="evidencia" />
-      <button id="merma-capture" class="btn-prim">Capturar fotografía</button>
-      <div style="height:10px;"></div>
-      <button id="merma-confirm" class="btn-ok">Registrar merma</button>
+
+      <div class="sol-filters">
+        <input id="mrm-q" class="txt sol-search" placeholder="Buscar por SKU, nombre o código…" />
+        <div id="mrm-chips" class="sol-chips"></div>
+      </div>
+
+      <div id="mrm-cards" class="sol-cards"></div>
+      <div style="height:120px;"></div>
+
+      <div class="sol-bar">
+        <div class="sol-sheet hidden" id="mrm-sheet">
+          <div class="sol-sheet-h">RESUMEN DE LA MERMA</div>
+          <div id="mrm-summary" class="sol-summary"></div>
+
+          <div class="sol-sheet-h" style="margin-top:12px;">MOTIVO</div>
+          <div id="mrm-motivos" class="sol-chips mrm-motivos"></div>
+
+          <div class="sol-sheet-h" style="margin-top:12px;">OBSERVACIONES (OPCIONAL)</div>
+          <textarea id="mrm-obs" class="txt" rows="2" placeholder="Detalle adicional…"></textarea>
+
+          <div class="mrm-foto">
+            <button id="mrm-capture" class="btn-ghost mrm-foto-btn">📷 Adjuntar evidencia fotográfica</button>
+            <div class="cam-wrap hidden"><video id="merma-cam" muted></video></div>
+            <img id="mrm-foto-prev" class="hidden" alt="evidencia" />
+          </div>
+        </div>
+        <div class="sol-cta-row">
+          <button id="mrm-total" class="sol-total" aria-label="Ver resumen">
+            <b id="mrm-total-n">0</b><small>ÍTEMS</small>
+          </button>
+          <button id="mrm-confirm" class="sol-cta mrm-cta" disabled>REGISTRAR MERMA →</button>
+        </div>
+      </div>
     </section>
 
     <!-- ── GESTOR DE PERMISOS (solo SuperAdmin) ─────────────────── -->
@@ -586,10 +613,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711i"></script>
-  <script src="js/metrology.js?v=20260711i"></script>
-  <script src="js/scanner.js?v=20260711i"></script>
-  <script src="js/outbox-service.js?v=20260711i"></script>
-  <script src="js/app.js?v=20260711i"></script>
+  <script src="js/api-client.js?v=20260711j"></script>
+  <script src="js/metrology.js?v=20260711j"></script>
+  <script src="js/scanner.js?v=20260711j"></script>
+  <script src="js/outbox-service.js?v=20260711j"></script>
+  <script src="js/app.js?v=20260711j"></script>
 </body>
 </html>

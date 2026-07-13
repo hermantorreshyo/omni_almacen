@@ -1426,49 +1426,177 @@ const App = (() => {
   /* ════════════════════════════════════════════════════════════════
      FLUJO 4 · MERMAS CON EVIDENCIA FOTOGRÁFICA
   ════════════════════════════════════════════════════════════════ */
+  const MERMA_MOTIVOS = [
+    { v: 'Caducidad',           t: 'Caducidad' },
+    { v: 'Deterioro',           t: 'Deterioro' },
+    { v: 'Error de producción', t: 'Error de producción' },
+    { v: 'PARA_CONSUMO',        t: 'Para consumo interno' },
+    { v: 'Otro',                t: 'Otro' },
+  ];
   async function openMerma() {
-    state.ctx = { foto: null };
     view('view-merma');
-    el('merma-cant').value = '';
-    el('merma-razon').value = '';
-    el('merma-obs').value = '';
-    el('merma-foto-prev').classList.add('hidden');
-    el('merma-confirm').disabled = false;
-    bindNumpad(el('merma-cant'));
-    resetSkuSearch('merma-sku-q', 'merma-sku-res');
-    el('merma-sku-q')._skuLoad();
+    state.ctx = { qty: {}, skus: [], tipo: '', motivo: '', foto: null };
+    el('mrm-ctx-user').textContent = state.user?.nombre || state.user?.username || '—';
+    el('mrm-ctx-int').textContent  = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
+    el('mrm-ctx-rol').textContent  = state.rol || '—';
+    el('mrm-q').value = '';
+    el('mrm-obs').value = '';
+    el('mrm-foto-prev').classList.add('hidden');
+    el('mrm-sheet').classList.add('hidden');
+    renderMrmChips();
+    renderMrmMotivos();
+    updateMrmCta();
+    await loadMrmSkus();
+  }
+  function renderMrmChips() {
+    const wrap = el('mrm-chips'); wrap.innerHTML = '';
+    SKU_TYPES.filter((t) => t.v !== 'FAV').forEach((t) => {
+      const b = document.createElement('button');
+      b.className = 'chip-f' + (state.ctx.tipo === t.v ? ' on' : '');
+      b.textContent = t.c || t.t;
+      b.addEventListener('click', () => { state.ctx.tipo = t.v; renderMrmChips(); loadMrmSkus().catch(() => {}); });
+      wrap.appendChild(b);
+    });
+  }
+  function renderMrmMotivos() {
+    const wrap = el('mrm-motivos'); wrap.innerHTML = '';
+    MERMA_MOTIVOS.forEach((m) => {
+      const b = document.createElement('button');
+      b.className = 'chip-f' + (state.ctx.motivo === m.v ? ' on' : '');
+      b.textContent = m.t;
+      b.addEventListener('click', () => { state.ctx.motivo = m.v; renderMrmMotivos(); updateMrmCta(); });
+      wrap.appendChild(b);
+    });
+  }
+  async function loadMrmSkus() {
+    const type = state.ctx.tipo || '';
+    const q = el('mrm-q').value.trim();
+    const base = { status: 'active', limit: 200 };
+    if (q) base.q = q;
+    el('mrm-cards').innerHTML = skeleton();
+    try {
+      const rows = type
+        ? rowsOf((await ApiClient.catalog('skus', { ...base, item_type: type })).data)
+            .filter((s) => (s.status ?? 'active') === 'active')
+        : await fetchAllSkus(base);
+      state.ctx.skus = rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      renderMrmCards();
+    } catch (e) { logError('merma/skus', e); el('mrm-cards').innerHTML = apiErrorBox([e]); }
+  }
+  function renderMrmCards() {
+    const wrap = el('mrm-cards');
+    const rows = state.ctx.skus;
+    wrap.innerHTML = '';
+    if (!rows.length) { wrap.innerHTML = empty('Sin productos para ese filtro.'); return; }
+    rows.forEach((s) => {
+      const unit = skuUnit(s);
+      const qty = state.ctx.qty[s.id] || 0;
+      const step = unit === 'ud' ? 1 : 100;
+      const card = document.createElement('div');
+      card.className = 'sol-card' + (qty > 0 ? ' picked' : '');
+      card.innerHTML = `
+        <div class="sol-card-main">
+          <div class="sol-card-top">
+            <span class="sol-sku">SKU ${s.id}</span>
+            ${s.item_type ? `<span class="sol-tag">${s.item_type}</span>` : ''}
+          </div>
+          <div class="sol-card-n">${s.name || ('SKU ' + s.id)}</div>
+          <div class="sol-card-c">${s.sku_final_code || ''}</div>
+          <div class="sol-card-m"><span>Cantidad a dar de baja (${unit})</span></div>
+        </div>
+        <div class="stepper">
+          <div class="stp-row">
+            <button class="stp-btn minus" aria-label="Restar">−</button>
+            <input class="stp-val" type="number" min="0" step="0.01" inputmode="decimal" value="${qty}" />
+            <button class="stp-btn plus" aria-label="Sumar">+</button>
+          </div>
+          <div class="stp-quick">
+            <button class="stp-q" data-add="${step}">+${step}</button>
+            <button class="stp-q" data-add="${step * 10}">+${step * 10}</button>
+            <button class="stp-q stp-pad" aria-label="Teclado numérico">⌨</button>
+          </div>
+        </div>`;
+      const val = card.querySelector('.stp-val');
+      const cur = () => state.ctx.qty[s.id] || 0;
+      card.querySelector('.minus').addEventListener('click', () => setMrmQty(s.id, cur() - step, val, card));
+      card.querySelector('.plus').addEventListener('click',  () => setMrmQty(s.id, cur() + step, val, card));
+      card.querySelectorAll('.stp-q[data-add]').forEach((q) =>
+        q.addEventListener('click', () => setMrmQty(s.id, cur() + Number(q.dataset.add), val, card)));
+      card.querySelector('.stp-pad').addEventListener('click', () => openNumpad(val));
+      val.addEventListener('input', () => setMrmQty(s.id, val.value, null, card));
+      wrap.appendChild(card);
+    });
+  }
+  function setMrmQty(id, q, val, card) {
+    q = Math.max(0, Number(q) || 0);
+    q = Math.round(q * 100) / 100;
+    if (q === 0) delete state.ctx.qty[id]; else state.ctx.qty[id] = q;
+    if (val) val.value = String(q);
+    if (card) card.classList.toggle('picked', q > 0);
+    updateMrmCta();
+  }
+  function updateMrmCta() {
+    const ids = Object.keys(state.ctx.qty || {});
+    el('mrm-total-n').textContent = String(ids.length);
+    const consumo = state.ctx.motivo === 'PARA_CONSUMO';
+    const btn = el('mrm-confirm');
+    btn.disabled = !ids.length || !state.ctx.motivo;
+    btn.textContent = consumo ? 'REGISTRAR CONSUMO INTERNO →' : 'REGISTRAR MERMA →';
+    if (!ids.length) el('mrm-sheet').classList.add('hidden');
+    renderMrmSummary();
+  }
+  function renderMrmSummary() {
+    const wrap = el('mrm-summary'); if (!wrap) return;
+    const byId = Object.fromEntries((state.ctx.skus || []).map((s) => [String(s.id), s]));
+    const ids = Object.keys(state.ctx.qty || {});
+    wrap.innerHTML = ids.length ? '' : '<div class="sol-sum-row"><span class="sol-sum-n">Sin productos seleccionados.</span></div>';
+    ids.forEach((id) => {
+      const s = byId[id] || {};
+      const r = document.createElement('div'); r.className = 'sol-sum-row';
+      r.innerHTML = `<span class="sol-sum-n">${s.name || ('SKU ' + id)}<span class="sol-sum-u">${s.sku_final_code || ''}</span></span>
+        <span class="sol-sum-q">${state.ctx.qty[id]} ${skuUnit(s)}</span>`;
+      wrap.appendChild(r);
+    });
   }
   async function captureMerma() {
     try {
       const b64 = await Scanner.capturePhoto(el('merma-cam'));
       state.ctx.foto = b64;
-      const img = el('merma-foto-prev');
+      const img = el('mrm-foto-prev');
       img.src = b64; img.classList.remove('hidden');
     } catch (e) { logError('merma/foto', e); toast('No se pudo capturar la imagen.', 'err'); }
   }
+  /* Un POST /inventory/scrap por SKU. Ubicación y lote los resuelve el API. */
   async function confirmMerma() {
-    const item  = pickedSku('merma-sku-q');
-    const cant  = Number(el('merma-cant').value);
-    const unit  = el('merma-unidad').value;
-    const razon = el('merma-razon').value;
-    const obs   = el('merma-obs').value.trim();
-    if (!item || !cant) { toast('Indica el producto y la cantidad.', 'warn'); return; }
-    if (!razon) { toast('Selecciona el motivo.', 'warn'); return; }
-
-    const consumo = razon === 'PARA_CONSUMO';
-    // Para consumo interno el motivo debe ir EXACTO (el API detecta el caso especial).
-    // location_id y batch_id los resuelve el API (zona_mermas + FEFO).
-    const payload = {
-      item_id: item,
-      item_type: 'sku',
-      quantity: Metrology.toBase(cant, unit),
-      reason: consumo ? 'PARA_CONSUMO' : (obs ? `${razon} — ${obs}` : razon),
-    };
-    if (state.ctx.foto) payload.file_data = state.ctx.foto;   // evidencia opcional
-    await sendTx('merma', payload,
-      consumo ? 'Consumo interno registrado. Stock movido a COCINA.' : 'Merma registrada. Stock decrementado.');
-    renderHub();
+    const ids = Object.keys(state.ctx.qty || {});
+    if (!ids.length) { toast('Indica la cantidad de al menos un producto.', 'warn'); return; }
+    if (!state.ctx.motivo) { toast('Selecciona el motivo.', 'warn'); return; }
+    const consumo = state.ctx.motivo === 'PARA_CONSUMO';
+    const obs = el('mrm-obs').value.trim();
+    const byId = Object.fromEntries((state.ctx.skus || []).map((s) => [String(s.id), s]));
+    setBusy('mrm-confirm', true);
+    try {
+      for (const id of ids) {
+        const s = byId[id] || {};
+        const payload = {
+          item_id: Number(id),
+          item_type: 'sku',
+          quantity: Metrology.toBase(state.ctx.qty[id], skuUnit(s)),
+          // PARA_CONSUMO debe ir exacto: el API lo trata como traslado a COCINA.
+          reason: consumo ? 'PARA_CONSUMO' : (obs ? `${state.ctx.motivo} — ${obs}` : state.ctx.motivo),
+        };
+        if (state.ctx.foto) payload.file_data = state.ctx.foto;
+        await ApiClient.merma(payload);
+      }
+      toast(consumo ? 'Consumo interno registrado. Stock movido a COCINA.'
+                    : 'Merma registrada. Stock decrementado.', 'ok');
+      renderHub();
+    } catch (e) {
+      logError('merma/registrar', e);
+      toast(e.message || 'No se pudo registrar la merma.', 'err');
+    } finally { setBusy('mrm-confirm', false); }
   }
+
 
   /* ════════════════════════════════════════════════════════════════
      ENVÍO TRANSACCIONAL (online → si falla red, Outbox)
@@ -1685,14 +1813,19 @@ const App = (() => {
     });
     el('sol-total').addEventListener('click', () => el('sol-sheet').classList.toggle('hidden'));
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
-    wireSkuSearch('merma-sku-q', 'merma-sku-res', null, { persistent: true });
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));
     el('ali-all').addEventListener('change', (e) => toggleAliAll(e.target.checked));
     el('cierre-confirm').addEventListener('click', () => confirmCierre().catch(() => {}));
     el('cie-all').addEventListener('change', (e) => toggleCieAll(e.target.checked));
-    el('merma-capture').addEventListener('click', captureMerma);
-    el('merma-confirm').addEventListener('click', () => confirmMerma().catch(() => {}));
+    // Mermas
+    let mrmTimer = null;
+    el('mrm-q').addEventListener('input', () => {
+      clearTimeout(mrmTimer); mrmTimer = setTimeout(() => loadMrmSkus().catch(() => {}), 250);
+    });
+    el('mrm-total').addEventListener('click', () => el('mrm-sheet').classList.toggle('hidden'));
+    el('mrm-capture').addEventListener('click', captureMerma);
+    el('mrm-confirm').addEventListener('click', () => confirmMerma().catch(() => {}));
     el('perm-save').addEventListener('click', () => savePermisos().catch(() => {}));
     el('emg-discard').addEventListener('click', () => { Outbox.discardHead(); el('view-emergency').classList.add('hidden'); });
     el('emg-resume').addEventListener('click',  () => { Outbox.resume();      el('view-emergency').classList.add('hidden'); });
