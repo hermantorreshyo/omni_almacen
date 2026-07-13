@@ -109,6 +109,8 @@
     .sol-chips::-webkit-scrollbar { display:none; }
     .chip-f { flex:none; border:1px solid #e5e7eb; background:#fff; color:#4b5563; border-radius:999px; padding:9px 16px; font-size:.76rem; font-weight:800; letter-spacing:.03em; cursor:pointer; white-space:nowrap; min-height:38px; }
     .chip-f.on { background:#10B981; border-color:#10B981; color:#fff; box-shadow:0 4px 12px rgba(16,185,129,.28); }
+    .chip-f.chip-fav.on { background:#1f2430; border-color:#1f2430; color:#fff; box-shadow:0 4px 12px rgba(31,36,48,.28); }
+    .chip-f.chip-fav { color:#1f2430; }
     .sol-cards { display:flex; flex-direction:column; gap:12px; }
     .sol-card { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #ece8f0; border-radius:18px; padding:14px; box-shadow:0 2px 8px rgba(31,36,48,.04); transition:box-shadow .15s, border-color .15s; }
     .sol-card.picked { border-color:#10B981; box-shadow:0 6px 18px rgba(16,185,129,.14); }
@@ -128,6 +130,9 @@
     .stp-val { width:56px; text-align:center; font-size:1.2rem; font-weight:800; color:#1f2430; border:0; background:transparent; padding:0; }
     .stp-quick { display:flex; gap:5px; }
     .stp-q { border:1px solid #e5e7eb; background:#fff; color:#642a72; border-radius:7px; padding:3px 7px; font-size:.66rem; font-weight:800; cursor:pointer; }
+    .stp-pad { font-size:.8rem; padding:3px 8px; line-height:1.2; }
+    .stp-val::-webkit-outer-spin-button, .stp-val::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+    .stp-val { -moz-appearance:textfield; }
     .sol-bar { position:fixed; left:0; right:0; bottom:0; z-index:20; background:#fff; border-top:1px solid #ece8f0; box-shadow:0 -8px 28px rgba(31,36,48,.10); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); }
     .sol-sheet { max-width:720px; margin:0 auto 12px; max-height:44vh; overflow-y:auto; }
     .sol-sheet-h { font-size:.7rem; font-weight:800; letter-spacing:.07em; color:#6b7280; margin-bottom:8px; }
@@ -581,10 +586,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711g"></script>
-  <script src="js/metrology.js?v=20260711g"></script>
-  <script src="js/scanner.js?v=20260711g"></script>
-  <script src="js/outbox-service.js?v=20260711g"></script>
-  <script src="js/app.js?v=20260711g"></script>
+  <script src="js/api-client.js?v=20260711i"></script>
+  <script src="js/metrology.js?v=20260711i"></script>
+  <script src="js/scanner.js?v=20260711i"></script>
+  <script src="js/outbox-service.js?v=20260711i"></script>
+  <script src="js/app.js?v=20260711i"></script>
 </body>
 </html>

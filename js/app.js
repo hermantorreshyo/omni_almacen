@@ -611,7 +611,7 @@ const App = (() => {
     el('sol-ctx-user').textContent = state.user?.nombre || state.user?.username || '—';
     el('sol-ctx-int').textContent  = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
     el('sol-ctx-rol').textContent  = state.rol || '—';
-    state.ctx.tipo = '';
+    state.ctx.tipo = 'FAV';
     renderSolChips();
     el('sol-sku-q').value = '';
     el('sol-sheet').classList.add('hidden');
@@ -691,11 +691,53 @@ const App = (() => {
     const wrap = el('sol-chips'); wrap.innerHTML = '';
     SKU_TYPES.forEach((t) => {
       const b = document.createElement('button');
-      b.className = 'chip-f' + (state.ctx.tipo === t.v ? ' on' : '');
+      b.className = 'chip-f' + (t.v === 'FAV' ? ' chip-fav' : '') + (state.ctx.tipo === t.v ? ' on' : '');
       b.textContent = t.c || t.t;
       b.addEventListener('click', () => { state.ctx.tipo = t.v; renderSolChips(); loadSolSkus().catch(() => {}); });
       wrap.appendChild(b);
     });
+  }
+
+  /* ── "Más usados": frecuencia por SKU de la sede ──────────────────────
+     Se acumula localmente al enviar cada solicitud y, la primera vez, se
+     siembra con el historial de traspasos de la sede (API). */
+  function freqKey() { return `omni1003_freq_${state.interlocutor || 0}`; }
+  function freqGet() {
+    try { return JSON.parse(localStorage.getItem(freqKey()) || '{}'); } catch (_) { return {}; }
+  }
+  function freqBump(ids) {
+    const f = freqGet();
+    ids.forEach((id) => { f[id] = (f[id] || 0) + 1; });
+    try { localStorage.setItem(freqKey(), JSON.stringify(f)); } catch (_) {}
+  }
+  async function freqSeed() {
+    const f = freqGet();
+    if (Object.keys(f).length) return f;
+    try {
+      const r = await ApiClient.traspasos();                    // traspasos de mi sede
+      const mine = Number(state.interlocutor);
+      const rows = rowsOf(r.data)
+        .filter((t) => { const d = destIntOf(t); return d == null || d === mine; })
+        .sort((a, b) => String(transferDate(b)).localeCompare(String(transferDate(a))))
+        .slice(0, 12);                                          // últimos 12 pedidos
+      const lotes = await Promise.all(rows.map((t) => transferItems(t).catch(() => [])));
+      lotes.flat().forEach((it) => {
+        const id = Number(it.item_id); if (!id) return;
+        f[id] = (f[id] || 0) + 1;
+      });
+      if (Object.keys(f).length) { try { localStorage.setItem(freqKey(), JSON.stringify(f)); } catch (_) {} }
+    } catch (e) { logError('sol/freq', e); }
+    return f;
+  }
+  async function fetchAllSkus(base) {
+    const [gen, pt] = await Promise.all([                        // el API omite PT por defecto
+      ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
+      ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
+    ]);
+    const seen = new Set();
+    return [...rowsOf(gen.data), ...rowsOf(pt.data)]
+      .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true; })
+      .filter((s) => (s.status ?? 'active') === 'active');
   }
   async function loadSolSkus() {
     const type = state.ctx.tipo || '';
@@ -705,6 +747,17 @@ const App = (() => {
     el('sol-sku-res').innerHTML = skeleton();
     try {
       let rows;
+      if (type === 'FAV') {
+        const f = await freqSeed();
+        const ids = Object.keys(f).sort((a, b) => f[b] - f[a]).map(Number);
+        if (!ids.length) {
+          el('sol-sku-res').innerHTML = empty('Aún no hay historial de pedidos. Usa "TODOS" para buscar.');
+          state.ctx.skus = []; return;
+        }
+        const all = await fetchAllSkus(base);
+        state.ctx.skus = ids.map((id) => all.find((s) => Number(s.id) === id)).filter(Boolean);
+        renderSolCards(); return;
+      }
       if (type) {
         rows = rowsOf((await ApiClient.catalog('skus', { ...base, item_type: type })).data);
       } else {
@@ -754,27 +807,29 @@ const App = (() => {
         <div class="stepper">
           <div class="stp-row">
             <button class="stp-btn minus" aria-label="Restar">−</button>
-            <input class="stp-val" inputmode="numeric" value="${qty}" />
+            <input class="stp-val" type="number" min="0" step="0.01" inputmode="decimal" value="${qty}" />
             <button class="stp-btn plus" aria-label="Sumar">+</button>
           </div>
           <div class="stp-quick">
             <button class="stp-q" data-add="${step}">+${step}</button>
             <button class="stp-q" data-add="${step * 10}">+${step * 10}</button>
+            <button class="stp-q stp-pad" aria-label="Teclado numérico">⌨</button>
           </div>
         </div>`;
       const val = card.querySelector('.stp-val');
       const cur = () => state.ctx.qty[s.id] || 0;
       card.querySelector('.minus').addEventListener('click', () => setSolQty(s.id, cur() - step, val, card));
       card.querySelector('.plus').addEventListener('click',  () => setSolQty(s.id, cur() + step, val, card));
-      card.querySelectorAll('.stp-q').forEach((q) =>
+      card.querySelectorAll('.stp-q[data-add]').forEach((q) =>
         q.addEventListener('click', () => setSolQty(s.id, cur() + Number(q.dataset.add), val, card)));
-      val.addEventListener('input', () => setSolQty(s.id, Number(val.value), null, card));
-      bindNumpad(val);
+      card.querySelector('.stp-pad').addEventListener('click', () => openNumpad(val));   // teclado numérico
+      val.addEventListener('input', () => setSolQty(s.id, val.value, null, card));
       wrap.appendChild(card);
     });
   }
   function setSolQty(id, q, val, card) {
-    q = Math.max(0, Math.floor(Number(q) || 0));
+    q = Math.max(0, Number(q) || 0);
+    q = Math.round(q * 100) / 100;                 // hasta 2 decimales
     if (q === 0) delete state.ctx.qty[id]; else state.ctx.qty[id] = q;
     if (val) val.value = String(q);
     if (card) card.classList.toggle('picked', q > 0);
@@ -818,6 +873,7 @@ const App = (() => {
       })),   // batch_id lo resuelve el API (FEFO o lote provisional)
       notes: el('sol-notes').value.trim(),
     };
+    freqBump(ids);                       // alimenta el filtro "Más usados"
     await sendTx('traspaso_solicitar', payload, 'Solicitud registrada (SOLICITADO).');
     renderHub();
   }
@@ -1477,6 +1533,7 @@ const App = (() => {
   }
 
   const SKU_TYPES = [
+    { v: 'FAV', t: 'Más usados',               c: '★ MÁS USADOS' },
     { v: '',   t: 'Todas las categorías',      c: 'TODOS' },
     { v: 'MP', t: 'MP · Materia prima',        c: 'MATERIA PRIMA' },
     { v: 'CD', t: 'CD · Consumo directo',      c: 'CONSUMO DIRECTO' },
@@ -1621,6 +1678,9 @@ const App = (() => {
     // Buscador y filtro de categoría de la solicitud (recarga las tarjetas).
     let solTimer = null;
     el('sol-sku-q').addEventListener('input', () => {
+      if (state.ctx.tipo === 'FAV' && el('sol-sku-q').value.trim()) {   // buscar => salir de "Más usados"
+        state.ctx.tipo = ''; renderSolChips();
+      }
       clearTimeout(solTimer); solTimer = setTimeout(() => loadSolSkus().catch(() => {}), 250);
     });
     el('sol-total').addEventListener('click', () => el('sol-sheet').classList.toggle('hidden'));
