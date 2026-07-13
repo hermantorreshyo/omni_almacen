@@ -982,17 +982,31 @@ const App = (() => {
     if (!items.every((it) => it.done)) { toast('Marca todos los ítems como alistados.', 'warn'); return; }
     const short = items.find((it) => it.despachada < Number(it.quantity_requested ?? 0) && !it.obs.trim());
     if (short) { toast('Añade una observación en los ítems con faltante.', 'warn'); return; }
-    const notes = items.filter((it) => it.obs.trim())
-      .map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
+
+    // Ítems sin existencias (0). El API exige quantity_dispatched > 0, así que se
+    // excluyen del payload y se dejan registrados en las observaciones del traspaso.
+    // (Pendiente: REQ al API CORE para aceptar 0 con inventory_restriction=false.)
+    const ceros = items.filter((it) => Number(it.despachada) <= 0);
+    const conStock = items.filter((it) => Number(it.despachada) > 0);
+    if (!conStock.length) {
+      toast('No puedes despachar el traspaso con todos los ítems en cero. Avisa al solicitante.', 'err');
+      return;
+    }
+    const notas = [
+      ...items.filter((it) => it.obs.trim()).map((it) => `${itemLabel(it)}: ${it.obs.trim()}`),
+      ...ceros.map((it) => `SIN STOCK (0 despachado): ${itemLabel(it)}`),
+    ].join(' | ');
+
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
-      notes,
-      items: items.map((it) => {
+      notes: notas,
+      items: conStock.map((it) => {
         const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: it.despachada };
         if (it.obs.trim()) o.notes = it.obs.trim();
         return o;
       }),
     };
+    if (ceros.length) toast(`${ceros.length} ítem(s) sin stock quedan registrados como no despachados.`, 'warn');
     await sendTx('picking_alistar', payload, 'Traspaso LISTO_DESPACHO (en tránsito).');
     openPicking();
   }
