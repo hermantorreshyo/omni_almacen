@@ -940,22 +940,24 @@ const App = (() => {
         <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" /><b>${itemLabel(it)}</b></label>
         <div class="oc-card-sub">Solicitada: <b>${sol}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
         <div class="oc-row2">
-          <div><div class="field-label">Despachada</div><input id="ali-qty-${i}" class="num" inputmode="numeric" value="${sol}" /></div>
+          <div><div class="field-label">Despachada</div>
+            <input id="ali-qty-${i}" class="num" type="number" min="0" step="0.01" inputmode="decimal" value="${sol}" /></div>
           <div><div class="field-label">Observación</div><input id="ali-obs-${i}" class="txt" placeholder="Opcional…" /></div>
         </div>
+        <div id="ali-warn-${i}" class="ali-warn hidden">⚠️ Mayor al solicitado</div>
         <button id="ali-zero-${i}" class="btn-zero">Sin stock (0)</button>`;
       grid.appendChild(card);
       setTimeout(() => {
-        const q = el(`ali-qty-${i}`), chk = el(`ali-chk-${i}`), obs = el(`ali-obs-${i}`);
-        bindNumpad(q);
-        q.addEventListener('input', () => {
-          let v = Number(q.value);
-          if (v > sol) { v = sol; q.value = String(sol); toast('No puede superar lo solicitado.', 'warn'); }
-          it.despachada = Math.max(0, v);          // 0 permitido: ítem sin existencias
-        });
+        const q = el(`ali-qty-${i}`), chk = el(`ali-chk-${i}`), obs = el(`ali-obs-${i}`), warn = el(`ali-warn-${i}`);
+        const sync = () => {
+          const v = Math.max(0, Number(q.value) || 0);      // sin tope superior; 0 permitido
+          it.despachada = Math.round(v * 100) / 100;        // 2 decimales
+          warn.classList.toggle('hidden', it.despachada <= sol);
+        };
+        q.addEventListener('input', sync);
         obs.addEventListener('input', () => { it.obs = obs.value; });
         el(`ali-zero-${i}`).addEventListener('click', () => {   // atajo: sin existencias
-          it.despachada = 0; q.value = '0';
+          q.value = '0'; sync();
           if (!obs.value.trim()) { obs.value = 'Sin stock'; it.obs = 'Sin stock'; }
         });
         chk.addEventListener('change', () => {
@@ -1000,7 +1002,7 @@ const App = (() => {
       traspaso_id: tId(state.ctx.traspaso),
       notes: notas,
       items: items.map((it) => {
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: Number(it.despachada) || 0 };
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: Math.round((Number(it.despachada) || 0) * 100) / 100 };
         if (it.obs.trim()) o.notes = it.obs.trim();
         return o;
       }),
