@@ -94,6 +94,29 @@
     .sku-opt-n { font-weight: 600; }
     .sku-opt-c { font-size: .78rem; color: #6b7280; }
     .sol-hint { font-size: .78rem; color: #9ca3af; margin: 4px 0 2px; }
+    /* ── Solicitud de insumos (rediseño) ── */
+    .sol-ctx { background: linear-gradient(180deg,#fff 0%, #faf7fb 100%); border: 1px solid #ece8f0; border-radius: 16px; padding: 12px 14px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(100,42,114,.05); }
+    .sol-ctx-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: .88rem; }
+    .sol-ctx-row span { color: #6b7280; }
+    .sol-ctx-row b { color: #642a72; }
+    .sol-filters { display: grid; grid-template-columns: 1fr 132px; gap: 10px; margin: 12px 0 10px; position: sticky; top: 60px; z-index: 5; background: #f6f4f8; padding: 8px 0; }
+    .sol-search { margin: 0; }
+    .sol-cat { margin: 0; }
+    .sol-cards { display: flex; flex-direction: column; gap: 10px; }
+    .sol-card { display: flex; align-items: center; gap: 12px; background: linear-gradient(180deg,#fff 0%, #fdfcfe 100%); border: 1px solid #ece8f0; border-left: 5px solid #642a72; border-radius: 16px; padding: 14px; box-shadow: 0 1px 2px rgba(31,36,48,.04); transition: border-color .15s, box-shadow .15s; }
+    .sol-card.picked { border-left-color: #10B981; background: #f5fbf8; box-shadow: 0 4px 14px rgba(16,185,129,.12); }
+    .sol-card-main { flex: 1; min-width: 0; }
+    .sol-card-n { font-weight: 700; font-size: .98rem; color: #1f2430; }
+    .sol-card-c { font-size: .76rem; color: #9ca3af; margin-top: 2px; }
+    .sol-card-m { font-size: .78rem; color: #6b7280; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .sol-card-m b { color: #374151; }
+    .stepper { display: flex; align-items: center; gap: 6px; flex: none; }
+    .stp-btn { width: 40px; height: 40px; border-radius: 12px; border: 0; background: #10B981; color: #fff; font-size: 1.3rem; font-weight: 700; cursor: pointer; line-height: 1; }
+    .stp-btn.minus { background: #e5e7eb; color: #4b5563; }
+    .stp-val { min-width: 52px; text-align: center; font-size: 1.25rem; font-weight: 800; color: #1f2430; border: 0; background: transparent; padding: 0; }
+    .sol-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(246,244,248,0) 0%, #f6f4f8 30%); z-index: 20; }
+    .sol-cta { width: 100%; max-width: 720px; margin: 0 auto; display: block; box-shadow: 0 8px 24px rgba(16,185,129,.28); letter-spacing: .3px; }
+    .sol-cta:disabled { background: #cbd5e1; box-shadow: none; }
     .sku-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid #f1f1f4; background: #fff; font-size: .92rem; cursor: pointer; min-height: 46px; }
     .sku-opt:hover, .sku-opt:active { background: #f3edf5; color: #642a72; }
     .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
@@ -349,29 +372,31 @@
     <!-- ── FLUJO 3A: SOLICITAR (crea transfer) ──────────────────── -->
     <section id="view-solicitar" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Solicitar traspaso</h1>
+      <h1 class="sec-title">Solicitud de insumos</h1>
+
+      <div class="sol-ctx">
+        <div class="sol-ctx-row"><span>Usuario</span><b id="sol-ctx-user">—</b></div>
+        <div class="sol-ctx-row"><span>Interlocutor</span><b id="sol-ctx-int">—</b></div>
+        <div class="sol-ctx-row"><span>Rol</span><b id="sol-ctx-rol">—</b></div>
+      </div>
+
       <div class="field-label">Origen (fábrica)</div>
       <select id="sol-origen" class="sel"></select>
-      <div class="field-label">Destino (tu tienda)</div>
-      <div class="ro-field" id="sol-dest-lbl">—</div>
-      <div class="field-label">Añadir ítem</div>
-      <select id="sol-sku-tipo" class="sel" style="margin-bottom:8px;"></select>
-      <input id="sol-sku-q" class="txt" placeholder="Escribe nombre o código para filtrar…" />
-      <div class="sol-hint">Toca un producto de la lista para seleccionarlo.</div>
-      <div id="sol-sku-res" class="sku-res"></div>
-      <div style="display:flex;gap:10px;margin-top:10px;">
-        <input id="sol-cant" class="num" inputmode="decimal" placeholder="Cant." />
-        <select id="sol-unidad" class="sel" style="max-width:120px;">
-          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
-          <option value="l">L</option><option value="ml">ml</option>
-        </select>
-        <button id="sol-add" class="btn-prim-sm">Añadir</button>
+
+      <div class="sol-filters">
+        <input id="sol-sku-q" class="txt sol-search" placeholder="Buscar por SKU, nombre o código…" />
+        <select id="sol-sku-tipo" class="sel sol-cat"></select>
       </div>
-      <div id="sol-items" style="margin-top:14px;"></div>
+
+      <div id="sol-sku-res" class="sol-cards"></div>
+
       <div class="field-label">Notas (opcional)</div>
       <input id="sol-notes" class="txt" placeholder="Reposición tienda centro" />
-      <div style="height:12px;"></div>
-      <button id="sol-confirm" class="btn-ok">Enviar solicitud</button>
+      <div style="height:88px;"></div>
+
+      <div class="sol-bar">
+        <button id="sol-confirm" class="btn-ok sol-cta" disabled>CONFIRMAR Y ENVIAR SOLICITUD</button>
+      </div>
     </section>
 
     <!-- ── FLUJO 3B/C: PICKING ──────────────────────────────────── -->
@@ -517,10 +542,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711b"></script>
-  <script src="js/metrology.js?v=20260711b"></script>
-  <script src="js/scanner.js?v=20260711b"></script>
-  <script src="js/outbox-service.js?v=20260711b"></script>
-  <script src="js/app.js?v=20260711b"></script>
+  <script src="js/api-client.js?v=20260711c"></script>
+  <script src="js/metrology.js?v=20260711c"></script>
+  <script src="js/scanner.js?v=20260711c"></script>
+  <script src="js/outbox-service.js?v=20260711c"></script>
+  <script src="js/app.js?v=20260711c"></script>
 </body>
 </html>

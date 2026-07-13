@@ -606,20 +606,22 @@ const App = (() => {
   // A) Solicitar insumos
   async function openSolicitar() {
     view('view-solicitar');
-    state.ctx = { items: [], originLocId: null, destLocId: null, fabricas: [] };
-    el('sol-cant').value = '';
+    state.ctx = { qty: {}, skus: [], stock: {}, fabricas: [] };
     el('sol-notes').value = '';
-    resetSkuSearch('sol-sku-q', 'sol-sku-res');
-    bindNumpad(el('sol-cant'));
-    el('sol-dest-lbl').textContent = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
+    el('sol-ctx-user').textContent = state.user?.nombre || state.user?.username || '—';
+    el('sol-ctx-int').textContent  = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
+    el('sol-ctx-rol').textContent  = state.rol || '—';
     const tsel = el('sol-sku-tipo');
     if (!tsel.options.length) SKU_TYPES.forEach((t) => tsel.add(new Option(t.t, t.v)));
     tsel.value = '';
+    el('sol-sku-q').value = '';
     fillSelect(el('sol-origen'), [], intName, 'Cargando fábricas…');
-    renderSolItems();
-    el('sol-sku-q')._skuLoad();            // muestra el listado de SKUs activos
+    el('sol-sku-res').innerHTML = skeleton();
+    updateSolCta();
     await loadFabricas();
     await resolveSolEndpoints();
+    await loadSolStock();
+    await loadSolSkus();
   }
   /* Carga fábricas (origen), ordenadas por id ascendente; la primera por defecto. */
   async function loadFabricas() {
@@ -635,10 +637,9 @@ const App = (() => {
         sel.appendChild(o);
       });
       if (!fabricas.length) fillSelect(sel, [], intName, 'Sin fábricas');
-      sel.onchange = () => resolveSolEndpoints();
+      sel.onchange = async () => { await resolveSolEndpoints(); await loadSolStock(); renderSolCards(); };
     } catch (e) { logError('sol/fabricas', e); fillSelect(el('sol-origen'), [], intName, 'Sin fábricas'); }
   }
-  /* Resuelve ubicaciones según la fábrica de origen elegida y la sede de trabajo. */
   async function locForInterlocutor(intId) {
     if (!intId) return null;
     let locs = [];
@@ -646,7 +647,7 @@ const App = (() => {
       const r = await ApiClient.catalog('locations', { interlocutor_id: intId });
       locs = rowsOf(r.data).filter((l) => Number(l.interlocutor_id) === Number(intId) || !l.interlocutor_id);
     } catch (e) { logError('sol/locs', e); }
-    if (!locs.length) {                                  // fallback: catálogo general
+    if (!locs.length) {
       await ensureCatalog('locations');
       locs = (state.catalogs.locations || []).filter((l) => Number(l.interlocutor_id) === Number(intId));
     }
@@ -661,57 +662,126 @@ const App = (() => {
     state.ctx.destIntId   = destIntId;
     state.ctx.originLocId = oLoc ? oLoc.id : null;
     state.ctx.destLocId   = dLoc ? dLoc.id : null;
-    el('sol-dest-lbl').textContent = state.interlocutorName || ('Interlocutor ' + destIntId);
     if (!oLoc) toast('La fábrica de origen no tiene ubicaciones registradas.', 'warn');
     if (!dLoc) toast('Tu sede no tiene ubicaciones registradas. Avisa al administrador.', 'warn');
   }
   function intName(i) { return i.commercial_name || i.fiscal_name || i.name || i.nombre || ('Interlocutor ' + i.id); }
-  function renderSolItems() {
-    const wrap = el('sol-items'); wrap.innerHTML = '';
-    state.ctx.items.forEach((it, i) => {
-      const r = document.createElement('div'); r.className = 'grid-row';
-      r.innerHTML = `<div class="grid-row-head"><b>${it.sku_label}</b>
-        <small>${it.quantity_requested} ${Metrology.baseUnit(it.unit)}</small></div>
-        <button class="btn-del-sm" data-i="${i}">Quitar</button>`;
-      r.querySelector('button').addEventListener('click', () => { state.ctx.items.splice(i, 1); renderSolItems(); });
-      wrap.appendChild(r);
+
+  /* Stock del origen: una sola llamada → mapa item_id → {qty, loc}. */
+  async function loadSolStock() {
+    state.ctx.stock = {};
+    const intId = state.ctx.originIntId;
+    if (!intId) return;
+    try {
+      const r = await ApiClient.stock({ interlocutor_id: intId });
+      rowsOf(r.data).forEach((s) => {
+        const id = Number(s.item_id ?? s.sku_id);
+        if (!id) return;
+        const q = Number(s.quantity ?? s.current_quantity ?? s.quantity_available ?? 0);
+        const prev = state.ctx.stock[id];
+        state.ctx.stock[id] = {
+          qty: (prev ? prev.qty : 0) + q,
+          loc: (prev && prev.loc) || s.location_qr || s.qr_code_uid || s.location_name || s.area_type || '',
+        };
+      });
+    } catch (e) { logError('sol/stock', e); }
+  }
+  /* Catálogo de SKUs: todas las categorías (el API omite PT → se pide aparte). */
+  async function loadSolSkus() {
+    const type = el('sol-sku-tipo').value;
+    const q = el('sol-sku-q').value.trim();
+    const base = { status: 'active', limit: 200 };
+    if (q) base.q = q;
+    el('sol-sku-res').innerHTML = skeleton();
+    try {
+      let rows;
+      if (type) {
+        rows = rowsOf((await ApiClient.catalog('skus', { ...base, item_type: type })).data);
+      } else {
+        const [gen, pt] = await Promise.all([
+          ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
+          ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
+        ]);
+        const seen = new Set();
+        rows = [...rowsOf(gen.data), ...rowsOf(pt.data)]
+          .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
+      }
+      state.ctx.skus = rows.filter((s) => (s.status ?? 'active') === 'active')
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      renderSolCards();
+    } catch (e) {
+      logError('sol/skus', e);
+      el('sol-sku-res').innerHTML = apiErrorBox([e]);
+    }
+  }
+  /* Tarjetas de SKU con stepper (cero tecleo). La cantidad viaja en state.ctx.qty. */
+  function renderSolCards() {
+    const wrap = el('sol-sku-res');
+    const rows = state.ctx.skus;
+    wrap.innerHTML = '';
+    if (!rows.length) { wrap.innerHTML = empty('Sin productos para ese filtro.'); return; }
+    rows.forEach((s) => {
+      const st = state.ctx.stock[Number(s.id)] || {};
+      const unit = skuUnit(s);
+      const qty = state.ctx.qty[s.id] || 0;
+      const card = document.createElement('div');
+      card.className = 'sol-card' + (qty > 0 ? ' picked' : '');
+      card.id = `sol-card-${s.id}`;
+      card.innerHTML = `
+        <div class="sol-card-main">
+          <div class="sol-card-n">${s.name || ('SKU ' + s.id)}</div>
+          <div class="sol-card-c">${[s.sku_final_code, s.item_type].filter(Boolean).join(' · ')}</div>
+          <div class="sol-card-m">
+            <span>Ubicación: <b>${st.loc || '—'}</b></span>
+            <span>Stock: <b>${st.qty != null ? st.qty : 0}</b> ${unit}</span>
+          </div>
+        </div>
+        <div class="stepper">
+          <button class="stp-btn minus" aria-label="Restar">−</button>
+          <input class="stp-val" inputmode="numeric" value="${qty}" />
+          <button class="stp-btn plus" aria-label="Sumar">+</button>
+        </div>`;
+      const val = card.querySelector('.stp-val');
+      card.querySelector('.minus').addEventListener('click', () => setSolQty(s.id, (state.ctx.qty[s.id] || 0) - 1, val, card));
+      card.querySelector('.plus').addEventListener('click',  () => setSolQty(s.id, (state.ctx.qty[s.id] || 0) + 1, val, card));
+      val.addEventListener('input', () => setSolQty(s.id, Number(val.value), null, card));
+      bindNumpad(val);
+      wrap.appendChild(card);
     });
   }
-  async function addSolItem() {
-    const item  = pickedSku('sol-sku-q');
-    const cant  = Number(el('sol-cant').value);
-    const unit  = el('sol-unidad').value;
-    if (!item) { toast('Selecciona un producto.', 'warn'); return; }
-    if (!(cant > 0)) { toast('La cantidad debe ser mayor a 0.', 'warn'); return; }
-    const label = el('sol-sku-res').querySelector('.sku-opt.sel')?.textContent || ('SKU ' + item);
-    // batch_id ya no es necesario: el API resuelve/crea el lote automáticamente.
-    state.ctx.items.push({
-      item_id: item,
-      quantity_requested: Metrology.toBase(cant, unit),
-      unit,
-      sku_label: label,
-    });
-    el('sol-cant').value = '';
-    resetSkuSearch('sol-sku-q', 'sol-sku-res');
-    renderSolItems();
+  function setSolQty(id, q, val, card) {
+    q = Math.max(0, Math.floor(Number(q) || 0));
+    if (q === 0) delete state.ctx.qty[id]; else state.ctx.qty[id] = q;
+    if (val) val.value = String(q);
+    if (card) card.classList.toggle('picked', q > 0);
+    updateSolCta();
+  }
+  function updateSolCta() {
+    const n = Object.keys(state.ctx.qty || {}).length;
+    const btn = el('sol-confirm');
+    btn.disabled = n === 0;
+    btn.textContent = n ? `CONFIRMAR Y ENVIAR SOLICITUD (${n})` : 'CONFIRMAR Y ENVIAR SOLICITUD';
   }
   async function confirmSolicitar() {
-    if (!state.ctx.items.length) { toast('Añade al menos un ítem.', 'warn'); return; }
+    const ids = Object.keys(state.ctx.qty || {});
+    if (!ids.length) { toast('Indica la cantidad de al menos un producto.', 'warn'); return; }
     if (!state.ctx.originLocId || !state.ctx.destLocId) {
       toast('No se pudo resolver origen/destino. Avisa al encargado.', 'err'); return;
     }
     const payload = {
       location_id_origin: state.ctx.originLocId,
       location_id_destination: state.ctx.destLocId,
-      // interlocutor_id_origin/dest NO se envían: el API los resuelve desde las ubicaciones.
-      items: state.ctx.items.map((it) => ({
-        item_id: it.item_id, item_type: 'sku', quantity_requested: it.quantity_requested,
-      })),   // batch_id ya no es necesario: el API resuelve/crea el lote
+      items: ids.map((id) => ({
+        item_id: Number(id),
+        item_type: 'sku',
+        quantity_requested: state.ctx.qty[id],
+      })),   // batch_id lo resuelve el API (FEFO o lote provisional)
       notes: el('sol-notes').value.trim(),
     };
     await sendTx('traspaso_solicitar', payload, 'Solicitud registrada (SOLICITADO).');
     renderHub();
   }
+
 
   // Helpers de traspaso (resolver interlocutores y fecha)
   function intNameById(id) {
@@ -1491,10 +1561,14 @@ const App = (() => {
     el('oc-back').addEventListener('click', () => openRecepcion().catch(() => {}));
     el('ubicar-scan').addEventListener('click', scanUbicacion);
     el('ubicar-confirm').addEventListener('click', () => confirmUbicar().catch(() => {}));
-    el('sol-add').addEventListener('click', () => addSolItem().catch(() => {}));
     // Buscadores de SKU (typeahead). Ubicar/merma recargan lotes al elegir.
 
-    wireSkuSearch('sol-sku-q', 'sol-sku-res', null, { persistent: true, typeSelectId: 'sol-sku-tipo' });
+    // Buscador y filtro de categoría de la solicitud (recarga las tarjetas).
+    let solTimer = null;
+    el('sol-sku-q').addEventListener('input', () => {
+      clearTimeout(solTimer); solTimer = setTimeout(() => loadSolSkus().catch(() => {}), 250);
+    });
+    el('sol-sku-tipo').addEventListener('change', () => loadSolSkus().catch(() => {}));
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
     wireSkuSearch('merma-sku-q', 'merma-sku-res', null, { persistent: true });
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
@@ -1507,7 +1581,6 @@ const App = (() => {
     el('perm-save').addEventListener('click', () => savePermisos().catch(() => {}));
     el('emg-discard').addEventListener('click', () => { Outbox.discardHead(); el('view-emergency').classList.add('hidden'); });
     el('emg-resume').addEventListener('click',  () => { Outbox.resume();      el('view-emergency').classList.add('hidden'); });
-    bindNumpad(el('sol-cant'));
     el('numpad-close').addEventListener('click', () => el('numpad').classList.add('hidden'));
   }
 
