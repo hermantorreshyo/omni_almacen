@@ -94,29 +94,55 @@
     .sku-opt-n { font-weight: 600; }
     .sku-opt-c { font-size: .78rem; color: #6b7280; }
     .sol-hint { font-size: .78rem; color: #9ca3af; margin: 4px 0 2px; }
-    /* ── Solicitud de insumos (rediseño) ── */
-    .sol-ctx { background: linear-gradient(180deg,#fff 0%, #faf7fb 100%); border: 1px solid #ece8f0; border-radius: 16px; padding: 12px 14px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(100,42,114,.05); }
-    .sol-ctx-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: .88rem; }
-    .sol-ctx-row span { color: #6b7280; }
-    .sol-ctx-row b { color: #642a72; }
-    .sol-filters { display: grid; grid-template-columns: 1fr 132px; gap: 10px; margin: 12px 0 10px; position: sticky; top: 60px; z-index: 5; background: #f6f4f8; padding: 8px 0; }
-    .sol-search { margin: 0; }
-    .sol-cat { margin: 0; }
-    .sol-cards { display: flex; flex-direction: column; gap: 10px; }
-    .sol-card { display: flex; align-items: center; gap: 12px; background: linear-gradient(180deg,#fff 0%, #fdfcfe 100%); border: 1px solid #ece8f0; border-left: 5px solid #642a72; border-radius: 16px; padding: 14px; box-shadow: 0 1px 2px rgba(31,36,48,.04); transition: border-color .15s, box-shadow .15s; }
-    .sol-card.picked { border-left-color: #10B981; background: #f5fbf8; box-shadow: 0 4px 14px rgba(16,185,129,.12); }
-    .sol-card-main { flex: 1; min-width: 0; }
-    .sol-card-n { font-weight: 700; font-size: .98rem; color: #1f2430; }
-    .sol-card-c { font-size: .76rem; color: #9ca3af; margin-top: 2px; }
-    .sol-card-m { font-size: .78rem; color: #6b7280; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
-    .sol-card-m b { color: #374151; }
-    .stepper { display: flex; align-items: center; gap: 6px; flex: none; }
-    .stp-btn { width: 40px; height: 40px; border-radius: 12px; border: 0; background: #10B981; color: #fff; font-size: 1.3rem; font-weight: 700; cursor: pointer; line-height: 1; }
-    .stp-btn.minus { background: #e5e7eb; color: #4b5563; }
-    .stp-val { min-width: 52px; text-align: center; font-size: 1.25rem; font-weight: 800; color: #1f2430; border: 0; background: transparent; padding: 0; }
-    .sol-bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(246,244,248,0) 0%, #f6f4f8 30%); z-index: 20; }
-    .sol-cta { width: 100%; max-width: 720px; margin: 0 auto; display: block; box-shadow: 0 8px 24px rgba(16,185,129,.28); letter-spacing: .3px; }
-    .sol-cta:disabled { background: #cbd5e1; box-shadow: none; }
+    /* ── Solicitud de insumos ── */
+    .sol-ctx { background:#fff; border:1px solid #ece8f0; border-radius:18px; padding:16px; margin-bottom:14px; box-shadow:0 4px 16px rgba(100,42,114,.06); }
+    .sol-ctx-h { font-size:.8rem; font-weight:800; letter-spacing:.08em; color:#10B981; margin-bottom:12px; }
+    .sol-ctx-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .sol-ctx-c { display:flex; flex-direction:column; gap:3px; min-width:0; }
+    .sol-ctx-c span { font-size:.66rem; font-weight:700; letter-spacing:.07em; color:#9ca3af; }
+    .sol-ctx-c b { font-size:.9rem; color:#1f2430; font-weight:700; }
+    .sol-ctx-c em { font-style:normal; font-size:.72rem; font-weight:800; color:#0a7d54; background:rgba(16,185,129,.12); border-radius:8px; padding:4px 8px; align-self:flex-start; letter-spacing:.04em; }
+    .sel-slim { min-height:40px; margin:0; font-weight:700; color:#642a72; }
+    .sol-filters { position:sticky; top:58px; z-index:6; background:#f6f4f8; padding:8px 0 6px; }
+    .sol-search { margin:0 0 10px; }
+    .sol-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+    .sol-chips::-webkit-scrollbar { display:none; }
+    .chip-f { flex:none; border:1px solid #e5e7eb; background:#fff; color:#4b5563; border-radius:999px; padding:9px 16px; font-size:.76rem; font-weight:800; letter-spacing:.03em; cursor:pointer; white-space:nowrap; min-height:38px; }
+    .chip-f.on { background:#10B981; border-color:#10B981; color:#fff; box-shadow:0 4px 12px rgba(16,185,129,.28); }
+    .sol-cards { display:flex; flex-direction:column; gap:12px; }
+    .sol-card { display:flex; align-items:center; gap:12px; background:#fff; border:1px solid #ece8f0; border-radius:18px; padding:14px; box-shadow:0 2px 8px rgba(31,36,48,.04); transition:box-shadow .15s, border-color .15s; }
+    .sol-card.picked { border-color:#10B981; box-shadow:0 6px 18px rgba(16,185,129,.14); }
+    .sol-card-main { flex:1; min-width:0; }
+    .sol-card-top { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+    .sol-sku { font-size:.68rem; font-weight:800; color:#9ca3af; letter-spacing:.04em; }
+    .sol-tag { font-size:.62rem; font-weight:800; letter-spacing:.05em; color:#0a7d54; background:rgba(16,185,129,.12); border-radius:6px; padding:3px 7px; }
+    .sol-card-n { font-weight:700; font-size:1rem; color:#1f2430; }
+    .sol-card-c { font-size:.76rem; color:#9ca3af; margin-top:2px; }
+    .sol-card-m { font-size:.75rem; color:#6b7280; margin-top:6px; display:flex; flex-direction:column; gap:2px; }
+    .sol-card-m b { color:#374151; }
+    .sol-crit { color:#b91c1c; font-weight:700; }
+    .stepper { display:flex; flex-direction:column; align-items:center; gap:6px; flex:none; }
+    .stp-row { display:flex; align-items:center; gap:6px; }
+    .stp-btn { width:38px; height:38px; border-radius:12px; border:0; background:#f3f4f6; color:#4b5563; font-size:1.2rem; font-weight:800; cursor:pointer; line-height:1; }
+    .stp-btn.plus { background:#10B981; color:#fff; box-shadow:0 4px 10px rgba(16,185,129,.28); }
+    .stp-val { width:56px; text-align:center; font-size:1.2rem; font-weight:800; color:#1f2430; border:0; background:transparent; padding:0; }
+    .stp-quick { display:flex; gap:5px; }
+    .stp-q { border:1px solid #e5e7eb; background:#fff; color:#642a72; border-radius:7px; padding:3px 7px; font-size:.66rem; font-weight:800; cursor:pointer; }
+    .sol-bar { position:fixed; left:0; right:0; bottom:0; z-index:20; background:#fff; border-top:1px solid #ece8f0; box-shadow:0 -8px 28px rgba(31,36,48,.10); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); }
+    .sol-sheet { max-width:720px; margin:0 auto 12px; max-height:44vh; overflow-y:auto; }
+    .sol-sheet-h { font-size:.7rem; font-weight:800; letter-spacing:.07em; color:#6b7280; margin-bottom:8px; }
+    .sol-summary { display:flex; flex-direction:column; }
+    .sol-sum-row { display:flex; justify-content:space-between; align-items:baseline; gap:12px; padding:8px 0; border-bottom:1px dashed #eee; }
+    .sol-sum-row:last-child { border-bottom:0; }
+    .sol-sum-n { color:#642a72; font-weight:600; font-size:.9rem; }
+    .sol-sum-u { color:#9ca3af; font-size:.74rem; margin-left:6px; }
+    .sol-sum-q { font-weight:800; color:#1f2430; white-space:nowrap; }
+    .sol-cta-row { display:flex; gap:10px; align-items:stretch; max-width:720px; margin:0 auto; }
+    .sol-total { flex:none; width:74px; border:1px solid #ece8f0; background:#faf9fc; border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; }
+    .sol-total b { font-size:1.4rem; font-weight:800; color:#642a72; line-height:1; }
+    .sol-total small { font-size:.6rem; font-weight:800; color:#9ca3af; letter-spacing:.06em; }
+    .sol-cta { flex:1; min-height:56px; border:0; border-radius:14px; background:#10B981; color:#fff; font-weight:800; font-size:.95rem; letter-spacing:.03em; cursor:pointer; box-shadow:0 8px 22px rgba(16,185,129,.30); }
+    .sol-cta:disabled { background:#cbd5e1; box-shadow:none; cursor:default; }
     .sku-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid #f1f1f4; background: #fff; font-size: .92rem; cursor: pointer; min-height: 46px; }
     .sku-opt:hover, .sku-opt:active { background: #f3edf5; color: #642a72; }
     .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
@@ -371,31 +397,42 @@
 
     <!-- ── FLUJO 3A: SOLICITAR (crea transfer) ──────────────────── -->
     <section id="view-solicitar" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Solicitud de insumos</h1>
+      <button data-back class="btn-ghost" style="margin-bottom:12px;">← Volver</button>
 
       <div class="sol-ctx">
-        <div class="sol-ctx-row"><span>Usuario</span><b id="sol-ctx-user">—</b></div>
-        <div class="sol-ctx-row"><span>Interlocutor</span><b id="sol-ctx-int">—</b></div>
-        <div class="sol-ctx-row"><span>Rol</span><b id="sol-ctx-rol">—</b></div>
+        <div class="sol-ctx-h">SOLICITUD DE INSUMOS</div>
+        <div class="sol-ctx-grid">
+          <div class="sol-ctx-c"><span>USUARIO</span><b id="sol-ctx-user">—</b></div>
+          <div class="sol-ctx-c"><span>INTERLOCUTOR</span><b id="sol-ctx-int">—</b></div>
+          <div class="sol-ctx-c"><span>ROL DE ACCESO</span><em id="sol-ctx-rol">—</em></div>
+        </div>
+        <div class="sol-ctx-c" style="margin-top:10px;">
+          <span>ORIGEN (FÁBRICA)</span>
+          <select id="sol-origen" class="sel sel-slim"></select>
+        </div>
       </div>
-
-      <div class="field-label">Origen (fábrica)</div>
-      <select id="sol-origen" class="sel"></select>
 
       <div class="sol-filters">
         <input id="sol-sku-q" class="txt sol-search" placeholder="Buscar por SKU, nombre o código…" />
-        <select id="sol-sku-tipo" class="sel sol-cat"></select>
+        <div id="sol-chips" class="sol-chips"></div>
       </div>
 
       <div id="sol-sku-res" class="sol-cards"></div>
-
-      <div class="field-label">Notas (opcional)</div>
-      <input id="sol-notes" class="txt" placeholder="Reposición tienda centro" />
-      <div style="height:88px;"></div>
+      <div style="height:110px;"></div>
 
       <div class="sol-bar">
-        <button id="sol-confirm" class="btn-ok sol-cta" disabled>CONFIRMAR Y ENVIAR SOLICITUD</button>
+        <div class="sol-sheet hidden" id="sol-sheet">
+          <div class="sol-sheet-h">RESUMEN DEL PEDIDO DE INSUMOS</div>
+          <div id="sol-summary" class="sol-summary"></div>
+          <div class="sol-sheet-h" style="margin-top:12px;">NOTAS O INSTRUCCIONES PARA EL ALMACÉN</div>
+          <textarea id="sol-notes" class="txt" rows="2" placeholder="Ej. Entregar antes del mediodía…"></textarea>
+        </div>
+        <div class="sol-cta-row">
+          <button id="sol-total" class="sol-total" aria-label="Ver resumen">
+            <b id="sol-total-n">0</b><small>ÍTEMS</small>
+          </button>
+          <button id="sol-confirm" class="sol-cta" disabled>CONFIRMAR Y ENVIAR SOLICITUD →</button>
+        </div>
       </div>
     </section>
 
@@ -542,10 +579,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711c"></script>
-  <script src="js/metrology.js?v=20260711c"></script>
-  <script src="js/scanner.js?v=20260711c"></script>
-  <script src="js/outbox-service.js?v=20260711c"></script>
-  <script src="js/app.js?v=20260711c"></script>
+  <script src="js/api-client.js?v=20260711d"></script>
+  <script src="js/metrology.js?v=20260711d"></script>
+  <script src="js/scanner.js?v=20260711d"></script>
+  <script src="js/outbox-service.js?v=20260711d"></script>
+  <script src="js/app.js?v=20260711d"></script>
 </body>
 </html>

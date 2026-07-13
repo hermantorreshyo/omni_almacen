@@ -611,10 +611,10 @@ const App = (() => {
     el('sol-ctx-user').textContent = state.user?.nombre || state.user?.username || '—';
     el('sol-ctx-int').textContent  = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
     el('sol-ctx-rol').textContent  = state.rol || '—';
-    const tsel = el('sol-sku-tipo');
-    if (!tsel.options.length) SKU_TYPES.forEach((t) => tsel.add(new Option(t.t, t.v)));
-    tsel.value = '';
+    state.ctx.tipo = '';
+    renderSolChips();
     el('sol-sku-q').value = '';
+    el('sol-sheet').classList.add('hidden');
     fillSelect(el('sol-origen'), [], intName, 'Cargando fábricas…');
     el('sol-sku-res').innerHTML = skeleton();
     updateSolCta();
@@ -687,8 +687,18 @@ const App = (() => {
     } catch (e) { logError('sol/stock', e); }
   }
   /* Catálogo de SKUs: todas las categorías (el API omite PT → se pide aparte). */
+  function renderSolChips() {
+    const wrap = el('sol-chips'); wrap.innerHTML = '';
+    SKU_TYPES.forEach((t) => {
+      const b = document.createElement('button');
+      b.className = 'chip-f' + (state.ctx.tipo === t.v ? ' on' : '');
+      b.textContent = t.c || t.t;
+      b.addEventListener('click', () => { state.ctx.tipo = t.v; renderSolChips(); loadSolSkus().catch(() => {}); });
+      wrap.appendChild(b);
+    });
+  }
   async function loadSolSkus() {
-    const type = el('sol-sku-tipo').value;
+    const type = state.ctx.tipo || '';
     const q = el('sol-sku-q').value.trim();
     const base = { status: 'active', limit: 200 };
     if (q) base.q = q;
@@ -724,26 +734,40 @@ const App = (() => {
       const st = state.ctx.stock[Number(s.id)] || {};
       const unit = skuUnit(s);
       const qty = state.ctx.qty[s.id] || 0;
+      const stock = Number(st.qty || 0);
+      const step = unit === 'ud' ? 1 : 100;               // g/ml → pasos de 100
       const card = document.createElement('div');
       card.className = 'sol-card' + (qty > 0 ? ' picked' : '');
-      card.id = `sol-card-${s.id}`;
       card.innerHTML = `
         <div class="sol-card-main">
+          <div class="sol-card-top">
+            <span class="sol-sku">SKU ${s.id}</span>
+            ${s.item_type ? `<span class="sol-tag">${s.item_type}</span>` : ''}
+          </div>
           <div class="sol-card-n">${s.name || ('SKU ' + s.id)}</div>
-          <div class="sol-card-c">${[s.sku_final_code, s.item_type].filter(Boolean).join(' · ')}</div>
+          <div class="sol-card-c">${s.sku_final_code || ''}</div>
           <div class="sol-card-m">
-            <span>Ubicación: <b>${st.loc || '—'}</b></span>
-            <span>Stock: <b>${st.qty != null ? st.qty : 0}</b> ${unit}</span>
+            <span>Ubicación actual: <b>${st.loc || '—'}</b></span>
+            <span>Stock actual: <b class="${stock <= 0 ? 'sol-crit' : ''}">${stock} ${unit}</b>${stock <= 0 ? ' <span class="sol-crit">⚠ Sin stock</span>' : ''}</span>
           </div>
         </div>
         <div class="stepper">
-          <button class="stp-btn minus" aria-label="Restar">−</button>
-          <input class="stp-val" inputmode="numeric" value="${qty}" />
-          <button class="stp-btn plus" aria-label="Sumar">+</button>
+          <div class="stp-row">
+            <button class="stp-btn minus" aria-label="Restar">−</button>
+            <input class="stp-val" inputmode="numeric" value="${qty}" />
+            <button class="stp-btn plus" aria-label="Sumar">+</button>
+          </div>
+          <div class="stp-quick">
+            <button class="stp-q" data-add="${step}">+${step}</button>
+            <button class="stp-q" data-add="${step * 10}">+${step * 10}</button>
+          </div>
         </div>`;
       const val = card.querySelector('.stp-val');
-      card.querySelector('.minus').addEventListener('click', () => setSolQty(s.id, (state.ctx.qty[s.id] || 0) - 1, val, card));
-      card.querySelector('.plus').addEventListener('click',  () => setSolQty(s.id, (state.ctx.qty[s.id] || 0) + 1, val, card));
+      const cur = () => state.ctx.qty[s.id] || 0;
+      card.querySelector('.minus').addEventListener('click', () => setSolQty(s.id, cur() - step, val, card));
+      card.querySelector('.plus').addEventListener('click',  () => setSolQty(s.id, cur() + step, val, card));
+      card.querySelectorAll('.stp-q').forEach((q) =>
+        q.addEventListener('click', () => setSolQty(s.id, cur() + Number(q.dataset.add), val, card)));
       val.addEventListener('input', () => setSolQty(s.id, Number(val.value), null, card));
       bindNumpad(val);
       wrap.appendChild(card);
@@ -757,10 +781,26 @@ const App = (() => {
     updateSolCta();
   }
   function updateSolCta() {
-    const n = Object.keys(state.ctx.qty || {}).length;
+    const ids = Object.keys(state.ctx.qty || {});
+    el('sol-total-n').textContent = String(ids.length);
     const btn = el('sol-confirm');
-    btn.disabled = n === 0;
-    btn.textContent = n ? `CONFIRMAR Y ENVIAR SOLICITUD (${n})` : 'CONFIRMAR Y ENVIAR SOLICITUD';
+    btn.disabled = ids.length === 0;
+    if (!ids.length) el('sol-sheet').classList.add('hidden');
+    renderSolSummary();
+  }
+  function renderSolSummary() {
+    const wrap = el('sol-summary'); if (!wrap) return;
+    const byId = Object.fromEntries((state.ctx.skus || []).map((s) => [String(s.id), s]));
+    const ids = Object.keys(state.ctx.qty || {});
+    wrap.innerHTML = ids.length ? '' : '<div class="sol-sum-row"><span class="sol-sum-n">Sin productos seleccionados.</span></div>';
+    ids.forEach((id) => {
+      const s = byId[id] || {};
+      const unit = skuUnit(s);
+      const r = document.createElement('div'); r.className = 'sol-sum-row';
+      r.innerHTML = `<span class="sol-sum-n">${s.name || ('SKU ' + id)}<span class="sol-sum-u">${s.sku_final_code || ''}</span></span>
+        <span class="sol-sum-q">${state.ctx.qty[id]} ${unit}</span>`;
+      wrap.appendChild(r);
+    });
   }
   async function confirmSolicitar() {
     const ids = Object.keys(state.ctx.qty || {});
@@ -1422,11 +1462,11 @@ const App = (() => {
   }
 
   const SKU_TYPES = [
-    { v: '',   t: 'Todas las categorías' },
-    { v: 'MP', t: 'MP · Materia prima' },
-    { v: 'CD', t: 'CD · Consumo directo' },
-    { v: 'PN', t: 'PN · Producto no fabricado' },
-    { v: 'PT', t: 'PT · Producto terminado' },
+    { v: '',   t: 'Todas las categorías',      c: 'TODOS' },
+    { v: 'MP', t: 'MP · Materia prima',        c: 'MATERIA PRIMA' },
+    { v: 'CD', t: 'CD · Consumo directo',      c: 'CONSUMO DIRECTO' },
+    { v: 'PN', t: 'PN · No fabricado',         c: 'NO FABRICADO' },
+    { v: 'PT', t: 'PT · Producto terminado',   c: 'TERMINADO' },
   ];
   /* Buscador de SKU (typeahead) — necesario con ~1000 SKUs activos.
      opts.persistent=true: muestra siempre el listado y la búsqueda lo filtra.
@@ -1568,7 +1608,7 @@ const App = (() => {
     el('sol-sku-q').addEventListener('input', () => {
       clearTimeout(solTimer); solTimer = setTimeout(() => loadSolSkus().catch(() => {}), 250);
     });
-    el('sol-sku-tipo').addEventListener('change', () => loadSolSkus().catch(() => {}));
+    el('sol-total').addEventListener('click', () => el('sol-sheet').classList.toggle('hidden'));
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
     wireSkuSearch('merma-sku-q', 'merma-sku-res', null, { persistent: true });
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
