@@ -373,8 +373,11 @@ switch ($action) {
     }
     case 'rutas_activas': {
         requireAuth();
+        $qs = [];
         $status = preg_replace('/[^a-z_]/', '', strtolower($_GET['status'] ?? ''));
-        relay(client()->request('GET', $UP['routes'] . ($status ? '?status=' . $status : ''), null, true));
+        if ($status) $qs['status'] = $status;
+        if (!empty($_GET['driver'])) $qs['driver'] = preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['driver']);
+        relay(client()->request('GET', $UP['routes'] . ($qs ? '?' . http_build_query($qs) : ''), null, true));
     }
     case 'conductores': {
         requireAuth();

@@ -1046,13 +1046,10 @@ const App = (() => {
     const short = items.find((it) => it.despachada < Number(it.quantity_requested ?? 0) && !it.obs.trim());
     if (short) { toast('Añade una observación en los ítems con faltante.', 'warn'); return; }
 
-    // El API acepta quantity_dispatched = 0 (ítem sin existencias): se envían TODOS
-    // los ítems con su cantidad real para no perder el "pedido no atendido".
+    // El API acepta quantity_dispatched = 0 (ítem revisado sin stock) y guarda notes.
     const ceros = items.filter((it) => Number(it.despachada) <= 0);
-    const notas = [
-      ...items.filter((it) => it.obs.trim()).map((it) => `${itemLabel(it)}: ${it.obs.trim()}`),
-      ...ceros.filter((it) => !it.obs.trim()).map((it) => `SIN STOCK: ${itemLabel(it)}`),
-    ].join(' | ');
+    const notas = items.filter((it) => it.obs.trim())
+      .map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
 
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
@@ -1075,9 +1072,10 @@ const App = (() => {
     const list = el('transporte-list'); list.innerHTML = skeleton();
     // Rutas activas: aceptan traspasos en estado despachado y en_transito.
     try {
+      const mio = isChofer() ? { driver: 'me' } : {};      // el chofer solo ve sus rutas
       const [rd, rt] = await Promise.all([
-        ApiClient.rutasActivas('despachado').catch(() => ({ data: [] })),
-        ApiClient.rutasActivas('en_transito').catch(() => ({ data: [] })),
+        ApiClient.rutasActivas('despachado', mio).catch(() => ({ data: [] })),
+        ApiClient.rutasActivas('en_transito', mio).catch(() => ({ data: [] })),
       ]);
       const seenR = new Set();
       state.rutas = [...rowsOf(rd.data), ...rowsOf(rt.data)]
@@ -1090,6 +1088,10 @@ const App = (() => {
     const mias = rows.filter((t) => { const o = originIntOf(t); return o == null || o === mine; });
     list.innerHTML = mias.length ? '' : empty('No hay pedidos listos para transportar.');
     mias.forEach((t) => list.appendChild(transporteCard(t)));
+  }
+  function isChofer() {
+    const r = (state.rol || '').toString().toLowerCase();
+    return /chofer|repartidor|conductor/.test(r);
   }
   function rutaLabel(r) {
     const base = r.route_code || ('Ruta ' + r.id);
