@@ -76,7 +76,50 @@ const Scanner = (() => {
     }
   }
 
-  return { scanQR, capturePhoto };
+  /* Captura interactiva: abre la cámara y muestra el recuadro en vivo hasta que
+     se llama al snapshot() devuelto. cancel() cierra sin capturar. */
+  async function startCamera(videoEl) {
+    const stream = await _openCamera(videoEl);
+    videoEl.parentElement.classList.remove('hidden');
+    const close = () => { _stop(stream); videoEl.parentElement.classList.add('hidden'); };
+    return {
+      snapshot(maxW = 1024, quality = 0.7) {
+        const scale = Math.min(1, maxW / (videoEl.videoWidth || maxW));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round((videoEl.videoWidth  || maxW) * scale);
+        canvas.height = Math.round((videoEl.videoHeight || maxW) * scale);
+        canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        const data = canvas.toDataURL('image/jpeg', quality);
+        close();
+        return data;
+      },
+      cancel: close,
+    };
+  }
+
+  /* Comprime una imagen de archivo a JPEG base64 (misma escala que la cámara). */
+  function compressFile(file, maxW = 1024, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Imagen no válida.'));
+        img.onload = () => {
+          const scale = Math.min(1, maxW / (img.width || maxW));
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  return { scanQR, capturePhoto, startCamera, compressFile };
 })();
 
 const Sound = (() => {

@@ -160,8 +160,13 @@
     .mrm-cta:disabled { background:#cbd5e1; box-shadow:none; }
     .mrm-motivos .chip-f.on { background:#642a72; border-color:#642a72; box-shadow:0 4px 12px rgba(100,42,114,.26); }
     .mrm-foto { margin-top: 12px; }
-    .mrm-foto-btn { width:100%; border:1px dashed #e5e7eb; border-radius:12px; min-height:44px; color:#642a72; font-weight:700; font-size:.84rem; }
+    .mrm-foto-actions { display: flex; gap: 10px; }
+    .mrm-foto-btn { flex: 1; border:1px dashed #e5e7eb; border-radius:12px; min-height:44px; color:#642a72; font-weight:700; font-size:.82rem; }
     #mrm-foto-prev { width:100%; border-radius:12px; margin-top:10px; }
+    .mrm-foto-clear { margin-top: 8px; width: 100%; min-height: 38px; border: 1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:10px; font-weight:700; font-size:.8rem; cursor:pointer; }
+    .cam-controls { display: flex; gap: 10px; padding: 10px; background: #000; }
+    .cam-shoot { flex: 1; min-height: 48px; border: 0; border-radius: 12px; background: #EF4444; color: #fff; font-weight: 800; font-size: .95rem; cursor: pointer; }
+    .cam-cancel { flex: none; min-height: 48px; padding: 0 16px; border: 0; border-radius: 12px; background: #374151; color: #fff; font-weight: 700; cursor: pointer; }
     .sku-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid #f1f1f4; background: #fff; font-size: .92rem; cursor: pointer; min-height: 46px; }
     .sku-opt:hover, .sku-opt:active { background: #f3edf5; color: #642a72; }
     .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
@@ -548,9 +553,20 @@
           <textarea id="mrm-obs" class="txt" rows="2" placeholder="Detalle adicional…"></textarea>
 
           <div class="mrm-foto">
-            <button id="mrm-capture" class="btn-ghost mrm-foto-btn">📷 Adjuntar evidencia fotográfica</button>
-            <div class="cam-wrap hidden"><video id="merma-cam" muted></video></div>
+            <div class="mrm-foto-actions">
+              <button id="mrm-capture" class="btn-ghost mrm-foto-btn">📷 Tomar foto</button>
+              <button id="mrm-upload-btn" class="btn-ghost mrm-foto-btn">🖼️ Subir imagen</button>
+            </div>
+            <input id="mrm-file" type="file" accept="image/*" class="hidden" />
+            <div class="cam-wrap hidden" id="mrm-cam-wrap">
+              <video id="merma-cam" muted playsinline></video>
+              <div class="cam-controls">
+                <button id="mrm-shoot" class="cam-shoot">Capturar</button>
+                <button id="mrm-cancel" class="cam-cancel">Cancelar</button>
+              </div>
+            </div>
             <img id="mrm-foto-prev" class="hidden" alt="evidencia" />
+            <button id="mrm-foto-clear" class="mrm-foto-clear hidden">Quitar evidencia</button>
           </div>
         </div>
         <div class="sol-cta-row">
@@ -613,10 +629,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711k"></script>
-  <script src="js/metrology.js?v=20260711k"></script>
-  <script src="js/scanner.js?v=20260711k"></script>
-  <script src="js/outbox-service.js?v=20260711k"></script>
-  <script src="js/app.js?v=20260711k"></script>
+  <script src="js/api-client.js?v=20260711l"></script>
+  <script src="js/metrology.js?v=20260711l"></script>
+  <script src="js/scanner.js?v=20260711l"></script>
+  <script src="js/outbox-service.js?v=20260711l"></script>
+  <script src="js/app.js?v=20260711l"></script>
 </body>
 </html>

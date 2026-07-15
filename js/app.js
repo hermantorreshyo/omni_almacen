@@ -1443,7 +1443,8 @@ const App = (() => {
     el('mrm-ctx-rol').textContent  = state.rol || '—';
     el('mrm-q').value = '';
     el('mrm-obs').value = '';
-    el('mrm-foto-prev').classList.add('hidden');
+    setMrmFoto(null);
+    el('mrm-cam-wrap').classList.add('hidden');
     el('mrm-sheet').classList.add('hidden');
     renderMrmChips();
     renderMrmMotivos();
@@ -1560,13 +1561,27 @@ const App = (() => {
       wrap.appendChild(r);
     });
   }
+  function setMrmFoto(b64) {
+    state.ctx.foto = b64;
+    const img = el('mrm-foto-prev');
+    if (b64) { img.src = b64; img.classList.remove('hidden'); el('mrm-foto-clear').classList.remove('hidden'); }
+    else { img.classList.add('hidden'); el('mrm-foto-clear').classList.add('hidden'); }
+  }
   async function captureMerma() {
     try {
-      const b64 = await Scanner.capturePhoto(el('merma-cam'));
-      state.ctx.foto = b64;
-      const img = el('mrm-foto-prev');
-      img.src = b64; img.classList.remove('hidden');
-    } catch (e) { logError('merma/foto', e); toast('No se pudo capturar la imagen.', 'err'); }
+      const cam = await Scanner.startCamera(el('merma-cam'));   // abre el recuadro en vivo
+      state.ctx._cam = cam;
+      el('mrm-shoot').onclick = () => { setMrmFoto(cam.snapshot()); state.ctx._cam = null; };
+      el('mrm-cancel').onclick = () => { cam.cancel(); state.ctx._cam = null; };
+    } catch (e) {
+      logError('merma/cam', e);
+      toast('No se pudo abrir la cámara. Usa "Subir imagen".', 'warn');
+    }
+  }
+  async function uploadMerma(file) {
+    if (!file) return;
+    try { setMrmFoto(await Scanner.compressFile(file)); }
+    catch (e) { logError('merma/upload', e); toast('No se pudo cargar la imagen.', 'err'); }
   }
   /* Un POST /inventory/scrap por SKU. Ubicación y lote los resuelve el API. */
   async function confirmMerma() {
@@ -1827,6 +1842,9 @@ const App = (() => {
     });
     el('mrm-total').addEventListener('click', () => el('mrm-sheet').classList.toggle('hidden'));
     el('mrm-capture').addEventListener('click', captureMerma);
+    el('mrm-upload-btn').addEventListener('click', () => el('mrm-file').click());
+    el('mrm-file').addEventListener('change', (e) => { uploadMerma(e.target.files[0]); e.target.value = ''; });
+    el('mrm-foto-clear').addEventListener('click', () => setMrmFoto(null));
     el('mrm-confirm').addEventListener('click', () => confirmMerma().catch(() => {}));
     el('perm-save').addEventListener('click', () => savePermisos().catch(() => {}));
     el('emg-discard').addEventListener('click', () => { Outbox.discardHead(); el('view-emergency').classList.add('hidden'); });
