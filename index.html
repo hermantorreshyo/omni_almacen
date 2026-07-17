@@ -203,6 +203,12 @@
     .btn-see { padding: 6px 0; font-size: .85rem; color: #642a72; }
     .tp-noroute { font-size: .85rem; color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 8px 12px; }
     .err-box { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 14px; padding: 14px 16px; font-size: .9rem; }
+    .mh-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .mh-total { display: flex; align-items: center; gap: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; color: #7f1d1d; font-size: .9rem; }
+    .mh-total-n { font-size: 1.6rem; font-weight: 800; color: #b91c1c; line-height: 1; }
+    .mh-qty { font-weight: 800; color: #b91c1c; white-space: nowrap; }
+    .mh-foto { width: 100%; border-radius: 12px; margin-top: 8px; display: block; }
+    .mh-foto-link { display: block; }
     .btn-zero { margin-top: 10px; min-height: 40px; width: 100%; border-radius: 12px; border: 1px solid #fecaca; background: #fff; color: #b91c1c; font-weight: 700; font-size: .82rem; cursor: pointer; }
     .ali-warn { margin-top: 8px; font-size: .78rem; font-weight: 700; color: #a86a06; background: rgba(245,158,11,.13); border-radius: 10px; padding: 6px 10px; }
     .tp-panel-h { font-weight: 700; color: #642a72; margin: 6px 0 10px; }
@@ -320,6 +326,7 @@
       <div class="drawer-sub">[1003] Almacenes y Mermas</div>
       <button class="drawer-item" id="drawer-hub">Operaciones</button>
       <button class="drawer-item" id="drawer-dashboard">Panel de traspasos</button>
+      <button class="drawer-item" id="drawer-merma-hist">Historial de mermas</button>
       <button class="drawer-item" id="drawer-permisos">Gestor de permisos</button>
       <button class="drawer-item drawer-logout" id="drawer-logout">Salir</button>
     </nav>
@@ -362,6 +369,19 @@
       <h1 class="sec-title">Operaciones</h1>
       <div id="hub-legend" class="hub-legend"></div>
       <div id="hub-tiles" style="display:flex;flex-direction:column;gap:12px;"></div>
+    </section>
+
+    <section id="view-merma-hist" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:12px;">← Volver</button>
+      <h1 class="sec-title">Historial de mermas</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Registros de tu sede. Filtra por rango de fechas.</p>
+      <div class="mh-filters">
+        <div><div class="field-label">Desde</div><input id="mh-from" type="date" class="txt" /></div>
+        <div><div class="field-label">Hasta</div><input id="mh-to" type="date" class="txt" /></div>
+      </div>
+      <button id="mh-apply" class="btn-prim" style="margin-bottom:14px;">Consultar</button>
+      <div id="mh-total" class="mh-total hidden"></div>
+      <div id="mh-list"></div>
     </section>
 
     <!-- ── PANEL DE TRASPASOS (dashboard + KPIs) ────────────────── -->
@@ -629,10 +649,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711l"></script>
-  <script src="js/metrology.js?v=20260711l"></script>
-  <script src="js/scanner.js?v=20260711l"></script>
-  <script src="js/outbox-service.js?v=20260711l"></script>
-  <script src="js/app.js?v=20260711l"></script>
+  <script src="js/api-client.js?v=20260711m"></script>
+  <script src="js/metrology.js?v=20260711m"></script>
+  <script src="js/scanner.js?v=20260711m"></script>
+  <script src="js/outbox-service.js?v=20260711m"></script>
+  <script src="js/app.js?v=20260711m"></script>
 </body>
 </html>

@@ -319,6 +319,8 @@ const App = (() => {
     const dash = el('drawer-dashboard'), perm = el('drawer-permisos');
     if (dash) dash.classList.toggle('hidden', !v.includes('dashboard'));
     if (perm) perm.classList.toggle('hidden', !v.includes('gestor_permisos'));
+    const mh = el('drawer-merma-hist');
+    if (mh) mh.classList.toggle('hidden', !v.includes('merma'));   // mismo permiso que registrar merma
   }
   function openDrawer() { el('app-drawer').classList.remove('hidden'); }
   function closeDrawer() { el('app-drawer').classList.add('hidden'); }
@@ -1428,6 +1430,56 @@ const App = (() => {
   /* ════════════════════════════════════════════════════════════════
      FLUJO 4 · MERMAS CON EVIDENCIA FOTOGRÁFICA
   ════════════════════════════════════════════════════════════════ */
+  const MEDIA_BASE = 'https://api.omni.josepan.app/storage/multimedia/';
+  function openMermaHist() {
+    view('view-merma-hist');
+    const to = new Date();
+    const from = new Date(); from.setDate(from.getDate() - 30);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    if (!el('mh-to').value) el('mh-to').value = iso(to);
+    if (!el('mh-from').value) el('mh-from').value = iso(from);
+    loadMermaHist();
+  }
+  async function loadMermaHist() {
+    const list = el('mh-list'); list.innerHTML = skeleton();
+    el('mh-total').classList.add('hidden');
+    const params = { interlocutor_id: state.interlocutor };   // solo mi sede
+    const f = el('mh-from').value, t = el('mh-to').value;
+    if (f) params.date_from = f;
+    if (t) params.date_to = t;
+    try {
+      const r = await ApiClient.kardexMermas(params);
+      const rows = rowsOf(r.data)
+        .sort((a, b) => String(b.created_at || b.movement_date || '').localeCompare(String(a.created_at || a.movement_date || '')));
+      if (!rows.length) { list.innerHTML = empty('Sin mermas en el rango seleccionado.'); return; }
+      const total = rows.reduce((s, m) => s + Math.abs(Number(m.quantity ?? m.cantidad ?? 0)), 0);
+      const tot = el('mh-total');
+      tot.classList.remove('hidden');
+      tot.innerHTML = `<div class="mh-total-n">${rows.length}</div><div>registros · <b>${Math.round(total * 100) / 100}</b> uds dadas de baja</div>`;
+      list.innerHTML = '';
+      rows.forEach((m) => list.appendChild(mermaHistCard(m)));
+    } catch (e) { logError('merma/hist', e); list.innerHTML = apiErrorBox([e]); }
+  }
+  function mermaHistCard(m) {
+    const qty = Math.abs(Number(m.quantity ?? m.cantidad ?? 0));
+    const fecha = m.created_at || m.movement_date || m.fecha || '';
+    const foto = m.file_name || m.evidence || m.multimedia || m.file;
+    const c = document.createElement('div'); c.className = 'rowcard col';
+    c.innerHTML = `<div class="rowcard-top"><b>${m.item_name || m.sku_name || ('SKU ' + (m.item_id ?? ''))}</b>
+      <span class="mh-qty">−${qty} ${m.unit || 'ud'}</span></div>
+      <small class="tp-sub">${m.reason || m.motivo || '—'}${fecha ? ' · ' + fmtDT(fecha) : ''}</small>`;
+    const det = document.createElement('div'); det.className = 'dash-det hidden';
+    det.innerHTML = `
+      ${m.batch_reference ? `<div class="dash-det-row"><span>Lote</span><b>${m.batch_reference}</b></div>` : ''}
+      ${m.location_name ? `<div class="dash-det-row"><span>Ubicación</span><b>${m.location_name}</b></div>` : ''}
+      ${m.responsible_user || m.created_by_user ? `<div class="dash-det-row"><span>Responsable</span><b>${m.responsible_user || m.created_by_user}</b></div>` : ''}
+      ${m.notes ? `<div class="dash-det-row"><span>Notas</span><b>${m.notes}</b></div>` : ''}
+      ${foto ? `<a class="mh-foto-link" href="${MEDIA_BASE}${encodeURIComponent(foto)}" target="_blank" rel="noopener"><img class="mh-foto" src="${MEDIA_BASE}${encodeURIComponent(foto)}" alt="evidencia" loading="lazy" /></a>` : ''}`;
+    const see = document.createElement('button'); see.className = 'btn-ghost btn-see'; see.textContent = 'Ver detalle';
+    see.addEventListener('click', () => det.classList.toggle('hidden'));
+    c.append(see, det);
+    return c;
+  }
   const MERMA_MOTIVOS = [
     { v: 'Caducidad',           t: 'Caducidad' },
     { v: 'Deterioro',           t: 'Deterioro' },
@@ -1812,6 +1864,8 @@ const App = (() => {
     el('drawer-logout').addEventListener('click', () => { closeDrawer(); doLogout(); });
     el('drawer-hub').addEventListener('click', () => { closeDrawer(); renderHub(); });
     el('drawer-dashboard').addEventListener('click', () => { closeDrawer(); openDashboard(); });
+    el('drawer-merma-hist').addEventListener('click', () => { closeDrawer(); openMermaHist(); });
+    el('mh-apply').addEventListener('click', () => loadMermaHist().catch(() => {}));
     el('drawer-permisos').addEventListener('click', () => { closeDrawer(); openPermisos(); });
     $$('[data-back]').forEach((b) => b.addEventListener('click', renderHub));
     el('oc-save').addEventListener('click', () => saveOC().catch(() => {}));

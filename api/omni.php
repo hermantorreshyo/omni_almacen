@@ -68,6 +68,7 @@ $UP = [
     'oc_receive'           => '/purchasing/orders/%d/receive', // PUT marcar recibida/almacenada
     'transfer'             => '/inventory/transfer',     // POST atómico (Traslado Interno/Externo)
     'scrap'                => '/inventory/scrap',         // POST merma con evidencia
+    'kardex_global'        => '/analytics/kardex',        // GET historial de movimientos
     /* Workflow de traspaso externo — PENDIENTE de publicación en API CORE
        (ver REQ_TRANSFER_WORKFLOW_1003.md). Rutas ya alineadas al contrato. */
     'transfers'            => '/inventory/transfers',                 // POST crear / GET ?state=
@@ -442,6 +443,16 @@ switch ($action) {
     }
 
     /* ── FLUJO 4: MERMAS (POST /inventory/scrap con evidencia) ──────────── */
+    case 'kardex_mermas': {
+        requireAuth();
+        $qs = ['movement_type' => 'Merma'];
+        if (!empty($_GET['days']))            $qs['days'] = (int) $_GET['days'];
+        if (!empty($_GET['date_from']))       $qs['date_from'] = preg_replace('/[^0-9\-]/', '', $_GET['date_from']);
+        if (!empty($_GET['date_to']))         $qs['date_to'] = preg_replace('/[^0-9\-]/', '', $_GET['date_to']);
+        if (!empty($_GET['item_id']))         $qs['item_id'] = (int) $_GET['item_id'];
+        if (!empty($_GET['interlocutor_id'])) $qs['interlocutor_id'] = (int) $_GET['interlocutor_id'];
+        relay(client()->request('GET', $UP['kardex_global'] . '?' . http_build_query($qs), null, true));
+    }
     case 'merma': {
         requireAuth();
         $in = bodyJson();

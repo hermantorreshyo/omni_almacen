@@ -128,6 +128,7 @@ const ApiClient = (() => {
 
     /* ── Flujo 4: Mermas ── */
     merma: (payload) => _request('merma', { method: 'POST', body: payload }),
+    kardexMermas: (params = {}) => _request('kardex_mermas', { query: params }),
 
     /* ── Pantallas visibles / Gestor de permisos ── */
     misPantallas: ()      => _request('mis_pantallas'),
