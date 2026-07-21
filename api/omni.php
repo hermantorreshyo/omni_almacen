@@ -364,6 +364,13 @@ switch ($action) {
         if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
         relay(client()->request('PUT', sprintf($UP['transfer_picking'], $id), '{}', true));
     }
+    case 'picking_guardar': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_picking'], $id),
+            json_encode(['items' => $in['items'] ?? []], JSON_UNESCAPED_UNICODE), true));
+    }
     case 'picking_alistar': {
         requireAuth();
         $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);

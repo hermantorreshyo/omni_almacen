@@ -114,6 +114,7 @@ const ApiClient = (() => {
     traspasoDetalle:    (id)      => _request('traspaso_detalle', { query: { id } }),
     traspasoSolicitar:  (payload) => _request('traspaso_solicitar',  { method: 'POST', body: payload }),
     pickingIniciar:     (payload) => _request('picking_iniciar',     { method: 'POST', body: payload }),
+    pickingGuardar:     (payload) => _request('picking_guardar',     { method: 'POST', body: payload }),
     pickingAlistar:     (payload) => _request('picking_alistar',     { method: 'POST', body: payload }),
     rutasActivas:       (status, extra = {}) => _request('rutas_activas', { query: { ...(status ? { status } : {}), ...extra } }),
     rutaDetalle:        (id)      => _request('ruta_detalle', { query: { id } }),

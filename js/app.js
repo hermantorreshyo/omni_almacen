@@ -980,7 +980,12 @@ const App = (() => {
       } catch (e) { logError('picking/detalle', e); items = await transferItems(t); }
       state.ctx = {
         traspaso: t, header,
-        items: items.map((it) => ({ ...it, despachada: Number(it.quantity_requested ?? 0), obs: '', done: false })),
+        items: items.map((it) => ({
+          ...it,
+          despachada: Number(it.quantity_picked ?? it.quantity_requested ?? 0),   // reabre con lo ya alistado
+          obs: it.picking_notes || '',
+          done: false,
+        })),
       };
       renderAlistar();
     } catch (e) { logError('picking/abrir', e); toast(e.message || 'No se pudo abrir el alistado.', 'err'); }
@@ -1045,14 +1050,24 @@ const App = (() => {
   async function confirmAlistar() {
     const items = state.ctx.items;
     if (!items.every((it) => it.done)) { toast('Marca todos los ítems como alistados.', 'warn'); return; }
-    const short = items.find((it) => it.despachada < Number(it.quantity_requested ?? 0) && !it.obs.trim());
-    if (short) { toast('Añade una observación en los ítems con faltante.', 'warn'); return; }
+    const short = items.find((it) => Number(it.despachada) < Number(it.quantity_requested ?? 0) && !it.obs.trim());
+    if (short) { toast(`Observación obligatoria en "${itemLabel(short)}" por despachar menos de lo solicitado.`, 'warn'); return; }
 
     // El API acepta quantity_dispatched = 0 (ítem revisado sin stock) y guarda notes.
     const ceros = items.filter((it) => Number(it.despachada) <= 0);
     const notas = items.filter((it) => it.obs.trim())
       .map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
 
+    // 1) Guardar en /picking la cantidad confirmada y la observación por ítem.
+    await ApiClient.pickingGuardar({
+      traspaso_id: tId(state.ctx.traspaso),
+      items: items.map((it) => {
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_picked: Math.round((Number(it.despachada) || 0) * 100) / 100 };
+        if (it.obs.trim()) o.notes = it.obs.trim();
+        return o;
+      }),
+    });
+    // 2) Despachar → LISTO_DESPACHO (quantity_dispatched + notas agregadas).
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
       notes: notas,
@@ -1292,15 +1307,26 @@ const App = (() => {
     el('cierre-sub').textContent = `Desde: ${header.origin_sede || intNameById(originIntOf(header))}${transferDate(header) ? ' · ' + fmtDT(transferDate(header)) : ''}`;
     const grid = el('cierre-grid'); grid.innerHTML = '';
     state.ctx.items.forEach((it, i) => {
+      const ped = Number(it.quantity_requested ?? 0);
       const env = Number(it.quantity_dispatched ?? it.quantity_requested ?? 0);
+      const faltante = env < ped;
+      const pickObs = it.picking_notes || '';
       const card = document.createElement('div'); card.className = 'ali-card'; card.id = `cie-card-${i}`;
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="cie-chk-${i}" /><b>${itemLabel(it)}</b></label>
-        <div class="cie-qty-row">
-          <span class="cie-qty-lbl">Cantidad enviada</span>
-          <span class="cie-qty-big">${env}</span>
+        <div class="cie-qty-grid">
+          <div class="cie-qty-box">
+            <span class="cie-qty-lbl">Pedida</span>
+            <span class="cie-qty-big">${ped}</span>
+          </div>
+          <div class="cie-qty-box">
+            <span class="cie-qty-lbl">Despachada</span>
+            <span class="cie-qty-big ${faltante ? 'cie-qty-warn' : ''}">${env}${faltante ? ' ⚠️' : ''}</span>
+          </div>
         </div>
+        ${faltante ? `<div class="cie-falta">Llegan ${ped - env} ${it.unit || 'ud'} menos de lo pedido.</div>` : ''}
         ${it.batch_reference ? `<div class="oc-card-sub">Lote ${it.batch_reference}</div>` : ''}
+        ${pickObs ? `<div class="cie-pickobs"><b>Nota del almacén:</b> ${pickObs}</div>` : ''}
         <div class="field-label">Observación / novedad (si hay diferencia o daño)</div>
         <input id="cie-obs-${i}" class="txt" placeholder="Escribe aquí cualquier objeción o novedad…" />`;
       grid.appendChild(card);
