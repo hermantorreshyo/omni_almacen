@@ -214,6 +214,7 @@
     .mh-qty { font-weight: 800; color: #b91c1c; white-space: nowrap; }
     .mh-foto { width: 100%; border-radius: 12px; margin-top: 8px; display: block; }
     .mh-foto-link { display: block; }
+    .btn-save-adv { width: 100%; min-height: 46px; border: 1px solid #ece8f0; border-radius: 12px; color: #642a72; font-weight: 700; font-size: .86rem; margin-bottom: 10px; background: #fff; }
     .btn-zero { margin-top: 10px; min-height: 40px; width: 100%; border-radius: 12px; border: 1px solid #fecaca; background: #fff; color: #b91c1c; font-weight: 700; font-size: .82rem; cursor: pointer; }
     .ali-warn { margin-top: 8px; font-size: .78rem; font-weight: 700; color: #a86a06; background: rgba(245,158,11,.13); border-radius: 10px; padding: 6px 10px; }
     .tp-panel-h { font-weight: 700; color: #642a72; margin: 6px 0 10px; }
@@ -505,6 +506,7 @@
       </div>
       <div id="alistar-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
       <div style="height:12px;"></div>
+      <button id="alistar-save" class="btn-ghost btn-save-adv">💾 Guardar avance (seguir después)</button>
       <button id="alistar-confirm" class="btn-ok" disabled>Marcar LISTO_DESPACHO</button>
     </section>
 
@@ -654,10 +656,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711o"></script>
-  <script src="js/metrology.js?v=20260711o"></script>
-  <script src="js/scanner.js?v=20260711o"></script>
-  <script src="js/outbox-service.js?v=20260711o"></script>
-  <script src="js/app.js?v=20260711o"></script>
+  <script src="js/api-client.js?v=20260711p"></script>
+  <script src="js/metrology.js?v=20260711p"></script>
+  <script src="js/scanner.js?v=20260711p"></script>
+  <script src="js/outbox-service.js?v=20260711p"></script>
+  <script src="js/app.js?v=20260711p"></script>
 </body>
 </html>

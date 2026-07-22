@@ -74,6 +74,7 @@ $UP = [
     'transfers'            => '/inventory/transfers',                 // POST crear / GET ?state=
     'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
     'transfer_picking'     => '/inventory/transfers/%d/picking',      // PUT
+    'transfer_picking_items' => '/inventory/transfers/%d/picking-items', // PATCH (EN_PICKING, no cambia estado)
     'transfer_dispatch'    => '/inventory/transfers/%d/dispatch',     // PUT
     'transfer_route'       => '/inventory/transfers/%d/route',        // PUT (legacy)
     'transfer_assign_route'=> '/inventory/transfers/%d/assign-route', // PUT asignar a ruta logística
@@ -378,6 +379,13 @@ switch ($action) {
         $body = ['items' => $in['items'] ?? []];
         if (!empty($in['notes'])) $body['notes'] = $in['notes'];
         relay(client()->request('PUT', sprintf($UP['transfer_dispatch'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'picking_items': {
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PATCH', sprintf($UP['transfer_picking_items'], $id),
+            json_encode(['items' => $in['items'] ?? []], JSON_UNESCAPED_UNICODE), true));
     }
     case 'rutas_activas': {
         requireAuth();

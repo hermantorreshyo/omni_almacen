@@ -1047,6 +1047,28 @@ const App = (() => {
     });
     updateAliProgress();
   }
+  /* Guarda el avance del picking (PATCH /picking-items, no cambia de estado).
+     Permite alistar en varias visitas: el picker sale y vuelve sin perder lo hecho. */
+  async function savePickingItems() {
+    const items = state.ctx.items;
+    return ApiClient.pickingItems({
+      traspaso_id: tId(state.ctx.traspaso),
+      items: items.map((it) => {
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_picked: Math.round((Number(it.despachada) || 0) * 100) / 100 };
+        if (it.obs.trim()) o.notes = it.obs.trim();
+        return o;
+      }),
+    });
+  }
+  async function guardarAvancePicking() {
+    setBusy('alistar-save', true);
+    try {
+      const r = await savePickingItems();
+      const n = r?.data?.items_updated;
+      toast(n != null ? `Avance guardado (${n} ítems).` : 'Avance guardado.', 'ok');
+    } catch (e) { logError('picking/avance', e); toast(e.message || 'No se pudo guardar el avance.', 'err'); }
+    finally { setBusy('alistar-save', false); }
+  }
   async function confirmAlistar() {
     const items = state.ctx.items;
     if (!items.every((it) => it.done)) { toast('Marca todos los ítems como alistados.', 'warn'); return; }
@@ -1058,15 +1080,10 @@ const App = (() => {
     const notas = items.filter((it) => it.obs.trim())
       .map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
 
-    // 1) Guardar en /picking la cantidad confirmada y la observación por ítem.
-    await ApiClient.pickingGuardar({
-      traspaso_id: tId(state.ctx.traspaso),
-      items: items.map((it) => {
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_picked: Math.round((Number(it.despachada) || 0) * 100) / 100 };
-        if (it.obs.trim()) o.notes = it.obs.trim();
-        return o;
-      }),
-    });
+    // 1) Guardar la cantidad confirmada y la observación por ítem.
+    //    El traspaso ya está EN_PICKING → PATCH /picking-items (PUT /picking solo sirve
+    //    para la transición SOLICITADO → EN_PICKING y fallaría con ERR_STATE).
+    await savePickingItems();
     // 2) Despachar → LISTO_DESPACHO (quantity_dispatched + notas agregadas).
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
@@ -1913,6 +1930,7 @@ const App = (() => {
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));
     el('ali-all').addEventListener('change', (e) => toggleAliAll(e.target.checked));
+    el('alistar-save').addEventListener('click', () => guardarAvancePicking());
     el('cierre-confirm').addEventListener('click', () => confirmCierre().catch(() => {}));
     el('cie-all').addEventListener('change', (e) => toggleCieAll(e.target.checked));
     // Mermas
