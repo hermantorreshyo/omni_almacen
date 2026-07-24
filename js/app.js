@@ -608,7 +608,7 @@ const App = (() => {
   // A) Solicitar insumos
   async function openSolicitar() {
     view('view-solicitar');
-    state.ctx = { qty: {}, skus: [], stock: {}, fabricas: [] };
+    state.ctx = { qty: {}, skus: [], stock: {}, fabricas: [], draftId: null, rows: {}, timers: {} };
     el('sol-notes').value = '';
     el('sol-ctx-user').textContent = state.user?.nombre || state.user?.username || '—';
     el('sol-ctx-int').textContent  = state.interlocutorName || ('Interlocutor ' + (state.interlocutor ?? '—'));
@@ -617,13 +617,33 @@ const App = (() => {
     renderSolChips();
     el('sol-sku-q').value = '';
     el('sol-sheet').classList.add('hidden');
+    setDraftStatus('');
     fillSelect(el('sol-origen'), [], intName, 'Cargando fábricas…');
     el('sol-sku-res').innerHTML = skeleton();
     updateSolCta();
     await loadFabricas();
     await resolveSolEndpoints();
+    await recoverDraft();          // ¿hay un borrador en curso de esta tienda?
     await loadSolStock();
     await loadSolSkus();
+    updateSolCta();
+  }
+  /* Recupera el BORRADOR abierto de la tienda (si lo hay) tras perder la sesión. */
+  async function recoverDraft() {
+    try {
+      const r = await ApiClient.traspasos('BORRADOR', { interlocutor_id: state.interlocutor });
+      const draft = rowsOf(r.data).find((t) => { const d = destIntOf(t); return d == null || d === Number(state.interlocutor); });
+      if (!draft) return;
+      state.ctx.draftId = tId(draft);
+      const det = await ApiClient.traspasoDetalle(state.ctx.draftId);
+      (det?.data?.items || []).forEach((it) => {
+        const iid = String(it.item_id);
+        state.ctx.qty[iid] = Number(it.quantity_requested ?? 0);
+        if (it.id != null) state.ctx.rows[iid] = it.id;
+      });
+      if (det?.data?.transfer?.notes) el('sol-notes').value = det.data.transfer.notes;
+      toast('Recuperamos tu borrador en curso.', 'ok');
+    } catch (e) { logError('draft/recover', e); }
   }
   /* Carga fábricas (origen), ordenadas por id ascendente; la primera por defecto. */
   async function loadFabricas() {
@@ -836,6 +856,84 @@ const App = (() => {
     if (val) val.value = String(q);
     if (card) card.classList.toggle('picked', q > 0);
     updateSolCta();
+    scheduleDraftSync(id);                          // guardado incremental (debounced)
+  }
+  /* ── Guardado incremental (borrador) ─────────────────────────────────── */
+  function setDraftStatus(s) {
+    const el0 = el('sol-draft-status'); if (!el0) return;
+    el0.textContent = s === 'saving' ? 'Guardando…' : s === 'saved' ? '✓ Guardado' : s === 'error' ? '⚠ Sin guardar' : '';
+    el0.className = 'sol-draft-status' + (s === 'error' ? ' err' : s === 'saved' ? ' ok' : '');
+  }
+  function scheduleDraftSync(id) {
+    if (!state.ctx.originLocId || !state.ctx.destLocId) return;   // sin endpoints no hay borrador
+    state.ctx.timers = state.ctx.timers || {};
+    clearTimeout(state.ctx.timers[id]);
+    setDraftStatus('saving');
+    state.ctx.timers[id] = setTimeout(() => syncDraftItem(id).catch(() => {}), 600);
+  }
+  function ingestRows(d) {
+    (d?.items || d?.details || []).forEach((it) => {
+      if (it.item_id != null && it.id != null) state.ctx.rows[String(it.item_id)] = it.id;
+    });
+  }
+  async function ensureDraft(firstId) {
+    if (state.ctx.draftId) return state.ctx.draftId;
+    if (state.ctx._creating) return state.ctx._creating;
+    const body = {
+      location_id_origin: state.ctx.originLocId,
+      location_id_destination: state.ctx.destLocId,
+      items: [{ item_id: Number(firstId), quantity_requested: state.ctx.qty[firstId] || 0 }],
+      notes: el('sol-notes').value.trim(),
+    };
+    state.ctx._creating = ApiClient.draftCrear(body).then((r) => {
+      const d = r?.data ?? {};
+      state.ctx.draftId = d.transfer_id ?? d.id ?? null;
+      ingestRows(d);
+      state.ctx._creating = null;
+      return state.ctx.draftId;
+    }).catch((e) => { state.ctx._creating = null; throw e; });
+    return state.ctx._creating;
+  }
+  async function syncDraftItem(id) {
+    const q = state.ctx.qty[id] || 0;
+    try {
+      if (q > 0) {
+        if (!state.ctx.draftId) {
+          await ensureDraft(id);
+          if (state.ctx.rows[String(id)] == null) await refreshDraftRows();
+        } else if (state.ctx.rows[String(id)] == null) {
+          const r = await ApiClient.draftItemsAdd({ transfer_id: state.ctx.draftId, items: [{ item_id: Number(id), quantity_requested: q }] });
+          ingestRows(r?.data ?? {});
+          if (state.ctx.rows[String(id)] == null) await refreshDraftRows();
+        } else {
+          await ApiClient.draftItemUpdate({ transfer_id: state.ctx.draftId, row_id: state.ctx.rows[String(id)], quantity_requested: q });
+        }
+      } else {
+        const row = state.ctx.rows[String(id)];
+        if (state.ctx.draftId && row != null) {
+          await ApiClient.draftItemRemove(state.ctx.draftId, row);
+          delete state.ctx.rows[String(id)];
+        }
+      }
+      setDraftStatus('saved');
+    } catch (e) { logError('draft/sync', e); setDraftStatus('error'); throw e; }
+  }
+  async function refreshDraftRows() {
+    if (!state.ctx.draftId) return;
+    try { ingestRows((await ApiClient.traspasoDetalle(state.ctx.draftId))?.data ?? {}); }
+    catch (e) { logError('draft/refresh', e); }
+  }
+  async function flushDraft() {
+    Object.values(state.ctx.timers || {}).forEach(clearTimeout);
+    for (const id of Object.keys(state.ctx.qty || {})) { try { await syncDraftItem(id); } catch (_) {} }
+  }
+  async function discardDraft() {
+    if (!state.ctx.draftId) { state.ctx.qty = {}; state.ctx.rows = {}; renderSolCards(); updateSolCta(); return; }
+    if (!confirm('¿Descartar el borrador y empezar de cero?')) return;
+    try { await ApiClient.draftDescartar(state.ctx.draftId); } catch (e) { logError('draft/descartar', e); }
+    state.ctx.draftId = null; state.ctx.qty = {}; state.ctx.rows = {};
+    setDraftStatus(''); renderSolCards(); updateSolCta();
+    toast('Borrador descartado.', 'ok');
   }
   function updateSolCta() {
     const ids = Object.keys(state.ctx.qty || {});
@@ -865,19 +963,28 @@ const App = (() => {
     if (!state.ctx.originLocId || !state.ctx.destLocId) {
       toast('No se pudo resolver origen/destino. Avisa al encargado.', 'err'); return;
     }
-    const payload = {
-      location_id_origin: state.ctx.originLocId,
-      location_id_destination: state.ctx.destLocId,
-      items: ids.map((id) => ({
-        item_id: Number(id),
-        item_type: 'sku',
-        quantity_requested: state.ctx.qty[id],
-      })),   // batch_id lo resuelve el API (FEFO o lote provisional)
-      notes: el('sol-notes').value.trim(),
-    };
-    freqBump(ids);                       // alimenta el filtro "Más usados"
-    await sendTx('traspaso_solicitar', payload, 'Solicitud registrada (SOLICITADO).');
-    renderHub();
+    setBusy('sol-confirm', true);
+    try {
+      await flushDraft();                          // asegura que el borrador está al día
+      freqBump(ids);
+      if (state.ctx.draftId) {
+        await ApiClient.draftEnviar({ transfer_id: state.ctx.draftId });   // BORRADOR → SOLICITADO
+        toast('Solicitud enviada (SOLICITADO).', 'ok');
+        renderHub();
+      } else {
+        // Fallback: si el borrador no se pudo crear, envío en una sola llamada.
+        const payload = {
+          location_id_origin: state.ctx.originLocId,
+          location_id_destination: state.ctx.destLocId,
+          items: ids.map((id) => ({ item_id: Number(id), item_type: 'sku', quantity_requested: state.ctx.qty[id] })),
+          notes: el('sol-notes').value.trim(),
+        };
+        await ApiClient.traspasoSolicitar(payload);
+        toast('Solicitud registrada (SOLICITADO).', 'ok');
+        renderHub();
+      }
+    } catch (e) { logError('sol/enviar', e); toast(e.message || 'No se pudo enviar la solicitud.', 'err'); }
+    finally { setBusy('sol-confirm', false); }
   }
 
 
@@ -1016,6 +1123,10 @@ const App = (() => {
           const v = Math.max(0, Number(q.value) || 0);      // sin tope superior; 0 permitido
           it.despachada = Math.round(v * 100) / 100;        // 2 decimales
           warn.classList.toggle('hidden', it.despachada <= sol);
+          // La observación es obligatoria si la cantidad difiere de la solicitada.
+          const distinto = it.despachada !== sol;
+          obs.classList.toggle('obs-req', distinto);
+          obs.placeholder = distinto ? 'Obligatoria: explica la diferencia…' : 'Opcional…';
         };
         q.addEventListener('input', sync);
         obs.addEventListener('input', () => { it.obs = obs.value; });
@@ -1072,8 +1183,12 @@ const App = (() => {
   async function confirmAlistar() {
     const items = state.ctx.items;
     if (!items.every((it) => it.done)) { toast('Marca todos los ítems como alistados.', 'warn'); return; }
-    const short = items.find((it) => Number(it.despachada) < Number(it.quantity_requested ?? 0) && !it.obs.trim());
-    if (short) { toast(`Observación obligatoria en "${itemLabel(short)}" por despachar menos de lo solicitado.`, 'warn'); return; }
+    const diff = items.find((it) => Number(it.despachada) !== Number(it.quantity_requested ?? 0) && !it.obs.trim());
+    if (diff) {
+      const menor = Number(diff.despachada) < Number(diff.quantity_requested ?? 0);
+      toast(`Observación obligatoria en "${itemLabel(diff)}" por despachar ${menor ? 'menos' : 'más'} de lo solicitado.`, 'warn');
+      return;
+    }
 
     // El API acepta quantity_dispatched = 0 (ítem revisado sin stock) y guarda notes.
     const ceros = items.filter((it) => Number(it.despachada) <= 0);
@@ -1926,6 +2041,7 @@ const App = (() => {
       clearTimeout(solTimer); solTimer = setTimeout(() => loadSolSkus().catch(() => {}), 250);
     });
     el('sol-total').addEventListener('click', () => el('sol-sheet').classList.toggle('hidden'));
+    el('sol-discard').addEventListener('click', () => discardDraft());
     wireSkuSearch('ubicar-sku-q', 'ubicar-sku-res', (s) => batchesForSku(s.id, el('ubicar-batch')));
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));

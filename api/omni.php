@@ -71,7 +71,12 @@ $UP = [
     'kardex_global'        => '/analytics/kardex',        // GET historial de movimientos
     /* Workflow de traspaso externo — PENDIENTE de publicación en API CORE
        (ver REQ_TRANSFER_WORKFLOW_1003.md). Rutas ya alineadas al contrato. */
-    'transfers'            => '/inventory/transfers',                 // POST crear / GET ?state=
+    'transfers'            => '/inventory/transfers',
+    'transfer_draft'       => '/inventory/transfers/draft',           // POST crear/continuar borrador
+    'transfer_items_add'   => '/inventory/transfers/%d/items',        // POST añadir ítems
+    'transfer_item_row'    => '/inventory/transfers/%d/items/%d',     // PATCH/DELETE fila de ítem
+    'transfer_solicitar'   => '/inventory/transfers/%d/solicitar',    // PUT enviar (BORRADOR→SOLICITADO)
+    'transfer_draft_del'   => '/inventory/transfers/%d',              // DELETE descartar borrador                 // POST crear / GET ?state=
     'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
     'transfer_picking'     => '/inventory/transfers/%d/picking',      // PUT
     'transfer_picking_items' => '/inventory/transfers/%d/picking-items', // PATCH (EN_PICKING, no cambia estado)
@@ -358,6 +363,42 @@ switch ($action) {
     case 'traspaso_solicitar': {
         requireAuth();
         relay(client()->request('POST', $UP['transfers'], json_encode(bodyJson(), JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'draft_crear': {           // POST /transfers/draft (crea o continúa el borrador de la tienda)
+        requireAuth();
+        relay(client()->request('POST', $UP['transfer_draft'], json_encode(bodyJson(), JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'draft_items_add': {       // POST /transfers/{id}/items
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['transfer_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'transfer_id inválido.', 422);
+        unset($in['transfer_id']);
+        relay(client()->request('POST', sprintf($UP['transfer_items_add'], $id), json_encode($in, JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'draft_item_update': {     // PATCH /transfers/{id}/items/{rowId}
+        requireAuth();
+        $in = bodyJson(); $id = (int) ($in['transfer_id'] ?? 0); $row = (int) ($in['row_id'] ?? 0);
+        if ($id <= 0 || $row <= 0) fail('ERR_PARAM', 'transfer_id y row_id son obligatorios.', 422);
+        relay(client()->request('PATCH', sprintf($UP['transfer_item_row'], $id, $row),
+            json_encode(['quantity_requested' => $in['quantity_requested'] ?? 0], JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'draft_item_remove': {     // DELETE /transfers/{id}/items/{rowId}
+        requireAuth();
+        $id = (int) ($_GET['transfer_id'] ?? 0); $row = (int) ($_GET['row_id'] ?? 0);
+        if ($id <= 0 || $row <= 0) fail('ERR_PARAM', 'transfer_id y row_id son obligatorios.', 422);
+        relay(client()->request('DELETE', sprintf($UP['transfer_item_row'], $id, $row), null, true));
+    }
+    case 'draft_enviar': {          // PUT /transfers/{id}/solicitar  (BORRADOR → SOLICITADO)
+        requireAuth();
+        $id = (int) (bodyJson()['transfer_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'transfer_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_solicitar'], $id), '{}', true));
+    }
+    case 'draft_descartar': {       // DELETE /transfers/{id}  (solo en BORRADOR)
+        requireAuth();
+        $id = (int) ($_GET['transfer_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'transfer_id inválido.', 422);
+        relay(client()->request('DELETE', sprintf($UP['transfer_draft_del'], $id), null, true));
     }
     case 'picking_iniciar': {
         requireAuth();
