@@ -38,6 +38,9 @@ const App = (() => {
   const el = (id) => document.getElementById(id);
 
   function view(id) {
+    // Al abandonar la solicitud, vaciar los cambios pendientes del borrador.
+    const solActivo = el('view-solicitar') && !el('view-solicitar').classList.contains('hidden');
+    if (solActivo && id !== 'view-solicitar' && state.ctx && state.ctx.timers) flushDraft().catch(() => {});
     $$('.view').forEach((v) => v.classList.add('hidden'));
     const target = el(id);
     if (target) target.classList.remove('hidden');
@@ -628,21 +631,27 @@ const App = (() => {
     await loadSolSkus();
     updateSolCta();
   }
-  /* Recupera el BORRADOR abierto de la tienda (si lo hay) tras perder la sesión. */
+  /* Recupera el BORRADOR abierto de la tienda (siempre al abrir la pantalla).
+     El JWT ya scopea a la sede, no hace falta enviar interlocutor_id. */
   async function recoverDraft() {
     try {
-      const r = await ApiClient.traspasos('BORRADOR', { interlocutor_id: state.interlocutor });
-      const draft = rowsOf(r.data).find((t) => { const d = destIntOf(t); return d == null || d === Number(state.interlocutor); });
+      const r = await ApiClient.traspasos('BORRADOR');
+      const draft = rowsOf(r.data)[0];
       if (!draft) return;
       state.ctx.draftId = tId(draft);
       const det = await ApiClient.traspasoDetalle(state.ctx.draftId);
-      (det?.data?.items || []).forEach((it) => {
+      const items = det?.data?.items || det?.data?.details || [];
+      items.forEach((it) => {
         const iid = String(it.item_id);
         state.ctx.qty[iid] = Number(it.quantity_requested ?? 0);
-        if (it.id != null) state.ctx.rows[iid] = it.id;
+        if (it.id != null) state.ctx.rows[iid] = it.id;   // itemRowId real
       });
       if (det?.data?.transfer?.notes) el('sol-notes').value = det.data.transfer.notes;
-      toast('Recuperamos tu borrador en curso.', 'ok');
+      if (items.length) {
+        setDraftStatus('saved');
+        el('sol-sheet').classList.remove('hidden');   // muestra el resumen con lo pendiente
+        toast(`Tienes una solicitud sin enviar (${items.length} ítem${items.length > 1 ? 's' : ''}). La continuamos.`, 'ok');
+      }
     } catch (e) { logError('draft/recover', e); }
   }
   /* Carga fábricas (origen), ordenadas por id ascendente; la primera por defecto. */
@@ -869,6 +878,13 @@ const App = (() => {
     state.ctx.timers = state.ctx.timers || {};
     clearTimeout(state.ctx.timers[id]);
     setDraftStatus('saving');
+    // Primer ítem sin borrador aún → crear YA (no esperar al debounce), para que
+    // no se pierda si el usuario sale enseguida. Los ajustes posteriores sí van debounced.
+    const q = state.ctx.qty[id] || 0;
+    if (q > 0 && !state.ctx.draftId && !state.ctx._creating && state.ctx.rows[String(id)] == null) {
+      syncDraftItem(id).catch(() => {});
+      return;
+    }
     state.ctx.timers[id] = setTimeout(() => syncDraftItem(id).catch(() => {}), 600);
   }
   function ingestRows(d) {
