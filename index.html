@@ -165,6 +165,16 @@
     .mrm-cta:disabled { background:#cbd5e1; box-shadow:none; }
     .mrm-motivos .chip-f.on { background:#642a72; border-color:#642a72; box-shadow:0 4px 12px rgba(100,42,114,.26); }
     .mrm-foto { margin-top: 12px; }
+    /* Secciones diferenciadas de la hoja de merma (evitar el "todo blanco") */
+    .mrm-sec { background: #faf7f8; border: 1px solid #f0e8ec; border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+    .mrm-sec .mrm-foto { margin-top: 0; }
+    .mrm-sec-h { font-size: .82rem; font-weight: 800; color: #642a72; margin-bottom: 8px; letter-spacing: .01em; }
+    .mrm-req { font-size: .7rem; font-weight: 700; color: #b91c1c; }
+    .mrm-opt { font-size: .7rem; font-weight: 600; color: #9ca3af; }
+    /* Resalta la sección de motivo hasta que se elige uno */
+    .mrm-sec-pick { border-color: #f59e0b; background: #fffdf5; box-shadow: 0 0 0 3px rgba(245,158,11,.10); }
+    .mrm-sec-pick.done { border-color: #10B981; background: #f5fbf8; box-shadow: none; }
+    .mrm-sec-pick.done .mrm-req { color: #0a7d54; }
     .mrm-foto-actions { display: flex; gap: 10px; }
     .mrm-foto-btn { flex: 1; border:1px dashed #e5e7eb; border-radius:12px; min-height:44px; color:#642a72; font-weight:700; font-size:.82rem; }
     #mrm-foto-prev { width:100%; border-radius:12px; margin-top:10px; }
@@ -580,15 +590,23 @@
 
       <div class="sol-bar">
         <div class="sol-sheet hidden" id="mrm-sheet">
-          <div class="sol-sheet-h">RESUMEN DE LA MERMA</div>
-          <div id="mrm-summary" class="sol-summary"></div>
+          <div class="mrm-sec">
+            <div class="mrm-sec-h">Resumen de la merma</div>
+            <div id="mrm-summary" class="sol-summary"></div>
+          </div>
 
-          <div class="sol-sheet-h" style="margin-top:12px;">MOTIVO</div>
-          <div id="mrm-motivos" class="sol-chips mrm-motivos"></div>
+          <div class="mrm-sec mrm-sec-pick" id="mrm-sec-motivo">
+            <div class="mrm-sec-h">Motivo <span class="mrm-req">· elige uno</span></div>
+            <div id="mrm-motivos" class="sol-chips mrm-motivos"></div>
+          </div>
 
-          <div class="sol-sheet-h" style="margin-top:12px;">OBSERVACIONES (OPCIONAL)</div>
-          <textarea id="mrm-obs" class="txt" rows="2" placeholder="Detalle adicional…"></textarea>
+          <div class="mrm-sec">
+            <div class="mrm-sec-h">Observaciones <span class="mrm-opt">· opcional</span></div>
+            <textarea id="mrm-obs" class="txt" rows="2" placeholder="Detalle adicional…"></textarea>
+          </div>
 
+          <div class="mrm-sec">
+            <div class="mrm-sec-h">Evidencia fotográfica <span class="mrm-opt">· opcional</span></div>
           <div class="mrm-foto">
             <div class="mrm-foto-actions">
               <button id="mrm-capture" class="btn-ghost mrm-foto-btn">📷 Tomar foto</button>
@@ -604,6 +622,7 @@
             </div>
             <img id="mrm-foto-prev" class="hidden" alt="evidencia" />
             <button id="mrm-foto-clear" class="mrm-foto-clear hidden">Quitar evidencia</button>
+          </div>
           </div>
         </div>
         <div class="sol-cta-row">
@@ -666,10 +685,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711s"></script>
-  <script src="js/metrology.js?v=20260711s"></script>
-  <script src="js/scanner.js?v=20260711s"></script>
-  <script src="js/outbox-service.js?v=20260711s"></script>
-  <script src="js/app.js?v=20260711s"></script>
+  <script src="js/api-client.js?v=20260711t"></script>
+  <script src="js/metrology.js?v=20260711t"></script>
+  <script src="js/scanner.js?v=20260711t"></script>
+  <script src="js/outbox-service.js?v=20260711t"></script>
+  <script src="js/app.js?v=20260711t"></script>
 </body>
 </html>

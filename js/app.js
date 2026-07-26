@@ -1654,11 +1654,14 @@ const App = (() => {
     c.append(see, det);
     return c;
   }
+  // Orden fijo para tabular. PARA_PROMOCION y PARA_CONSUMO no son pérdida real:
+  // el core las trata como traslado (no descuenta como merma). El resto sí es baja.
   const MERMA_MOTIVOS = [
+    { v: 'PARA_PROMOCION',      t: 'Para promoción' },
+    { v: 'PARA_CONSUMO',        t: 'Para consumo interno' },
     { v: 'Caducidad',           t: 'Caducidad' },
     { v: 'Deterioro',           t: 'Deterioro' },
     { v: 'Error de producción', t: 'Error de producción' },
-    { v: 'PARA_CONSUMO',        t: 'Para consumo interno' },
     { v: 'Otro',                t: 'Otro' },
   ];
   async function openMerma() {
@@ -1767,11 +1770,15 @@ const App = (() => {
   function updateMrmCta() {
     const ids = Object.keys(state.ctx.qty || {});
     el('mrm-total-n').textContent = String(ids.length);
-    const consumo = state.ctx.motivo === 'PARA_CONSUMO';
+    const m = state.ctx.motivo;
     const btn = el('mrm-confirm');
-    btn.disabled = !ids.length || !state.ctx.motivo;
-    btn.textContent = consumo ? 'REGISTRAR CONSUMO INTERNO →' : 'REGISTRAR MERMA →';
+    btn.disabled = !ids.length || !m;
+    btn.textContent = m === 'PARA_PROMOCION' ? 'REGISTRAR PROMOCIÓN →'
+                    : m === 'PARA_CONSUMO'   ? 'REGISTRAR CONSUMO INTERNO →'
+                    : 'REGISTRAR MERMA →';
     if (!ids.length) el('mrm-sheet').classList.add('hidden');
+    const sec = el('mrm-sec-motivo');
+    if (sec) { sec.classList.toggle('done', !!m); const req = sec.querySelector('.mrm-req'); if (req) req.textContent = m ? '· listo ✓' : '· elige uno'; }
     renderMrmSummary();
   }
   function renderMrmSummary() {
@@ -1814,7 +1821,7 @@ const App = (() => {
     const ids = Object.keys(state.ctx.qty || {});
     if (!ids.length) { toast('Indica la cantidad de al menos un producto.', 'warn'); return; }
     if (!state.ctx.motivo) { toast('Selecciona el motivo.', 'warn'); return; }
-    const consumo = state.ctx.motivo === 'PARA_CONSUMO';
+    const especial = state.ctx.motivo === 'PARA_CONSUMO' || state.ctx.motivo === 'PARA_PROMOCION';
     const obs = el('mrm-obs').value.trim();
     const byId = Object.fromEntries((state.ctx.skus || []).map((s) => [String(s.id), s]));
     setBusy('mrm-confirm', true);
@@ -1825,14 +1832,16 @@ const App = (() => {
           item_id: Number(id),
           item_type: 'sku',
           quantity: Metrology.toBase(state.ctx.qty[id], skuUnit(s)),
-          // PARA_CONSUMO debe ir exacto: el API lo trata como traslado a COCINA.
-          reason: consumo ? 'PARA_CONSUMO' : (obs ? `${state.ctx.motivo} — ${obs}` : state.ctx.motivo),
+          // PARA_CONSUMO / PARA_PROMOCION van EXACTOS: el core los trata como traslado,
+          // no como pérdida. El resto de motivos sí decrementan como merma.
+          reason: especial ? state.ctx.motivo : (obs ? `${state.ctx.motivo} — ${obs}` : state.ctx.motivo),
         };
         if (state.ctx.foto) payload.file_data = state.ctx.foto;
         await ApiClient.merma(payload);
       }
-      toast(consumo ? 'Consumo interno registrado. Stock movido a COCINA.'
-                    : 'Merma registrada. Stock decrementado.', 'ok');
+      toast(state.ctx.motivo === 'PARA_CONSUMO' ? 'Consumo interno registrado. Stock trasladado.'
+          : state.ctx.motivo === 'PARA_PROMOCION' ? 'Promoción registrada. Stock trasladado.'
+          : 'Merma registrada. Stock decrementado.', 'ok');
       renderHub();
     } catch (e) {
       logError('merma/registrar', e);
