@@ -3,6 +3,7 @@
 **Subsistema solicitante:** [1003] Gestión de Almacenes y Mermas
 **Endpoint afectado:** `PUT /api/v1/inventory/transfers/{id}/close`
 **Prioridad:** Alta — afecta la exactitud del inventario en origen y destino
+**Estado:** ✅ ATENDIDA (2026-07) — el core implementó `disposition` por ítem. `devuelto` reingresa a origen; `no_recibido` se registra como merma en tránsito (no reingresa). [1003] ya envía el campo correcto; sin cambios de envío pendientes.
 
 ---
 

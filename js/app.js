@@ -1477,8 +1477,8 @@ const App = (() => {
         ${faltante ? `<div class="cie-falta">Llegan ${ped - env} ${it.unit || 'ud'} menos de lo pedido.</div>` : ''}
         ${it.batch_reference ? `<div class="oc-card-sub">Lote ${it.batch_reference}</div>` : ''}
         ${pickObs ? `<div class="cie-pickobs"><b>Nota del almacén:</b> ${pickObs}</div>` : ''}
-        <label class="cie-flag"><input type="checkbox" id="cie-nr-${i}" /><span>No recibido en tienda</span></label>
-        <label class="cie-flag"><input type="checkbox" id="cie-dv-${i}" /><span>Devuelto a bodega</span></label>
+        <label class="cie-flag"><input type="checkbox" id="cie-nr-${i}" /><span>No recibido en tienda <em class="cie-hint">· se registra como merma en tránsito</em></span></label>
+        <label class="cie-flag"><input type="checkbox" id="cie-dv-${i}" /><span>Devuelto a bodega <em class="cie-hint">· reingresa al origen</em></span></label>
         <div class="field-label">Observación / novedad (si hay diferencia o daño)</div>
         <input id="cie-obs-${i}" class="txt" placeholder="Escribe aquí cualquier objeción o novedad…" />`;
       grid.appendChild(card);
