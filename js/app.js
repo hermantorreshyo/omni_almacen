@@ -1459,6 +1459,8 @@ const App = (() => {
       const env = Number(it.quantity_dispatched ?? it.quantity_requested ?? 0);
       const faltante = env < ped;
       const pickObs = it.picking_notes || '';
+      it.recibida = env;            // por defecto se recibe lo despachado
+      it.norecibido = false;
       const card = document.createElement('div'); card.className = 'ali-card'; card.id = `cie-card-${i}`;
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="cie-chk-${i}" /><b>${itemLabel(it)}</b></label>
@@ -1475,12 +1477,19 @@ const App = (() => {
         ${faltante ? `<div class="cie-falta">Llegan ${ped - env} ${it.unit || 'ud'} menos de lo pedido.</div>` : ''}
         ${it.batch_reference ? `<div class="oc-card-sub">Lote ${it.batch_reference}</div>` : ''}
         ${pickObs ? `<div class="cie-pickobs"><b>Nota del almacén:</b> ${pickObs}</div>` : ''}
+        <label class="cie-noreb"><input type="checkbox" id="cie-nr-${i}" /><span>No recibido en tienda <em>(no suma al inventario)</em></span></label>
         <div class="field-label">Observación / novedad (si hay diferencia o daño)</div>
         <input id="cie-obs-${i}" class="txt" placeholder="Escribe aquí cualquier objeción o novedad…" />`;
       grid.appendChild(card);
       setTimeout(() => {
-        const chk = el(`cie-chk-${i}`), obs = el(`cie-obs-${i}`);
+        const chk = el(`cie-chk-${i}`), obs = el(`cie-obs-${i}`), nr = el(`cie-nr-${i}`);
         obs.addEventListener('input', () => { it.obs = obs.value; });
+        nr.addEventListener('change', () => {
+          it.norecibido = nr.checked;
+          it.recibida = nr.checked ? 0 : env;          // no recibido → 0 al inventario
+          card.classList.toggle('cie-nr-on', nr.checked);
+          if (nr.checked && !obs.value.trim()) { obs.value = 'No recibido en tienda'; it.obs = obs.value; }
+        });
         chk.addEventListener('change', () => {
           it.done = chk.checked; card.classList.toggle('ali-done', chk.checked); updateCieProgress();
         });
@@ -1506,15 +1515,17 @@ const App = (() => {
   async function confirmCierre() {
     const items = state.ctx.items;
     if (!items.every((it) => it.done)) { toast('Marca todos los ítems como revisados.', 'warn'); return; }
-    // La cantidad recibida = enviada (no editable). Las novedades van en observaciones.
-    const notes = items.filter((it) => it.obs.trim()).map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
+    // Ítems marcados "No recibido" → quantity_received = 0 (no suma al inventario de tienda).
+    const notes = items.filter((it) => it.obs.trim() || it.norecibido)
+      .map((it) => `${itemLabel(it)}: ${it.norecibido ? 'NO RECIBIDO' : ''}${it.obs.trim() ? (it.norecibido ? ' — ' : '') + it.obs.trim() : ''}`)
+      .join(' | ');
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
       reception_date: new Date().toISOString().slice(0, 10),
       notes,
       items: items.map((it) => {
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_received: it.recibida };
-        if (it.obs.trim()) o.notes = it.obs.trim();
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_received: it.norecibido ? 0 : Number(it.recibida) };
+        if (it.obs.trim() || it.norecibido) o.notes = it.norecibido ? ('NO RECIBIDO' + (it.obs.trim() ? ' — ' + it.obs.trim() : '')) : it.obs.trim();
         return o;
       }),
     };
