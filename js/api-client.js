@@ -91,6 +91,7 @@ const ApiClient = (() => {
     login:   (usuario, password) => _request('login',   { method: 'POST', body: { usuario, password } }),
     session: ()                  => _request('session'),
     logout:  ()                  => _request('logout',  { method: 'POST' }),
+    changePassword: (payload)    => _request('change_password', { method: 'POST', body: payload }),
 
     /* ── Catálogo ── */
     catalog: (resource, params = {}) => _request('catalog', { query: { resource, ...params } }),

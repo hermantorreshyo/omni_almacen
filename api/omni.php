@@ -272,6 +272,24 @@ switch ($action) {
         out(['ok' => true]);
     }
 
+    case 'change_password': {
+        requireAuth();
+        $in = bodyJson();
+        $cur = (string) ($in['current_password'] ?? '');
+        $new = (string) ($in['new_password'] ?? '');
+        if ($cur === '' || $new === '') fail('ERR_VALIDATION', 'Faltan datos de contraseña.', 400);
+        $res = client()->request('POST', '/auth/change-password',
+            json_encode(['current_password' => $cur, 'new_password' => $new], JSON_UNESCAPED_UNICODE), true);
+        if (!$res['ok']) {
+            // Propaga el mensaje del core (política, credencial incorrecta, etc.).
+            fail($res['code'] ?? 'ERR_CHANGE_PW', $res['error'] ?? 'No se pudo cambiar la contraseña.', $res['status'] ?: 400);
+        }
+        // El core devuelve un token nuevo y revoca el anterior → actualizar la sesión.
+        $newToken = $res['data']['token'] ?? $res['data']['access_token'] ?? null;
+        if ($newToken) $_SESSION['omni_token'] = $newToken;
+        out(['ok' => true, 'message' => 'Contraseña actualizada correctamente.']);   // no se expone el token al cliente
+    }
+
     /* ── CATÁLOGO (lectura) ─────────────────────────────────────────────── */
     case 'catalog': {
         requireAuth();

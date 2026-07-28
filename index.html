@@ -243,6 +243,14 @@
     .tp-noroute { font-size: .85rem; color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 8px 12px; }
     .err-box { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 14px; padding: 14px 16px; font-size: .9rem; }
     .mh-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .pw-rules { list-style: none; padding: 0; margin: 8px 0 4px; display: flex; flex-direction: column; gap: 4px; }
+    .pw-rules li { font-size: .82rem; color: #9ca3af; padding-left: 20px; position: relative; }
+    .pw-rules li::before { content: '\25cb'; position: absolute; left: 0; }
+    .pw-rules li.ok { color: #0a7d54; }
+    .pw-rules li.ok::before { content: '\2713'; color: #0a7d54; }
+    .pw-msg { font-size: .86rem; margin: 8px 0 12px; min-height: 18px; }
+    .pw-msg.ok { color: #0a7d54; }
+    .pw-msg.err { color: #b91c1c; }
     .mh-total { display: flex; align-items: center; gap: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; color: #7f1d1d; font-size: .9rem; }
     .mh-total-n { font-size: 1.6rem; font-weight: 800; color: #b91c1c; line-height: 1; }
     .mh-qty { font-weight: 800; color: #b91c1c; white-space: nowrap; }
@@ -369,6 +377,7 @@
       <button class="drawer-item" id="drawer-dashboard">Panel de traspasos</button>
       <button class="drawer-item" id="drawer-merma-hist">Historial de mermas</button>
       <button class="drawer-item" id="drawer-permisos">Gestor de permisos</button>
+      <button class="drawer-item" id="drawer-password">Cambiar contraseña</button>
       <button class="drawer-item drawer-logout" id="drawer-logout">Salir</button>
     </nav>
   </div>
@@ -423,6 +432,30 @@
       <button id="mh-apply" class="btn-prim" style="margin-bottom:14px;">Consultar</button>
       <div id="mh-total" class="mh-total hidden"></div>
       <div id="mh-list"></div>
+    </section>
+
+    <section id="view-password" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:12px;">← Volver</button>
+      <h1 class="sec-title">Cambiar contraseña</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Mínimo 8 caracteres, con al menos una letra y un número.</p>
+
+      <div class="field-label">Contraseña actual</div>
+      <input id="pw-cur" type="password" class="txt" autocomplete="current-password" placeholder="Tu contraseña actual" />
+
+      <div class="field-label">Contraseña nueva</div>
+      <input id="pw-new" type="password" class="txt" autocomplete="new-password" placeholder="Nueva contraseña" />
+      <ul id="pw-rules" class="pw-rules">
+        <li id="pw-r-len">Al menos 8 caracteres</li>
+        <li id="pw-r-letter">Al menos una letra</li>
+        <li id="pw-r-num">Al menos un número</li>
+        <li id="pw-r-user">Distinta de tu usuario</li>
+      </ul>
+
+      <div class="field-label">Confirmar contraseña nueva</div>
+      <input id="pw-conf" type="password" class="txt" autocomplete="new-password" placeholder="Repite la nueva contraseña" />
+      <div id="pw-msg" class="pw-msg"></div>
+
+      <button id="pw-submit" class="btn-ok" disabled>Actualizar contraseña</button>
     </section>
 
     <!-- ── PANEL DE TRASPASOS (dashboard + KPIs) ────────────────── -->
@@ -704,10 +737,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260712a"></script>
-  <script src="js/metrology.js?v=20260712a"></script>
-  <script src="js/scanner.js?v=20260712a"></script>
-  <script src="js/outbox-service.js?v=20260712a"></script>
-  <script src="js/app.js?v=20260712a"></script>
+  <script src="js/api-client.js?v=20260712b"></script>
+  <script src="js/metrology.js?v=20260712b"></script>
+  <script src="js/scanner.js?v=20260712b"></script>
+  <script src="js/outbox-service.js?v=20260712b"></script>
+  <script src="js/app.js?v=20260712b"></script>
 </body>
 </html>

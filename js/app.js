@@ -343,6 +343,51 @@ const App = (() => {
     return s?.screen_key || s?.key || s?.screen || s?.clave || '';
   }
 
+  /* ── Cambiar contraseña ───────────────────────────────────────────── */
+  function pwPolicy(pw) {
+    const user = (state.user?.username || state.user?.nombre || '').toLowerCase();
+    return {
+      len: pw.length >= 8 && pw.length <= 72,
+      letter: /[a-zA-Z\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f1\u00c1\u00c9\u00cd\u00d3\u00da\u00dc\u00d1]/.test(pw),
+      num: /[0-9]/.test(pw),
+      user: pw.length > 0 && pw.toLowerCase() !== user,
+    };
+  }
+  function openPassword() {
+    view('view-password');
+    ['pw-cur', 'pw-new', 'pw-conf'].forEach((id) => { el(id).value = ''; });
+    el('pw-msg').textContent = ''; el('pw-msg').className = 'pw-msg';
+    updatePwRules();
+  }
+  function updatePwRules() {
+    const p = pwPolicy(el('pw-new').value);
+    const set = (id, ok) => { const e = el(id); if (e) e.className = ok ? 'ok' : ''; };
+    set('pw-r-len', p.len); set('pw-r-letter', p.letter); set('pw-r-num', p.num); set('pw-r-user', p.user);
+    const conf = el('pw-conf').value;
+    const match = conf.length > 0 && conf === el('pw-new').value;
+    const ok = p.len && p.letter && p.num && p.user && match && el('pw-cur').value.length > 0;
+    el('pw-submit').disabled = !ok;
+    return ok;
+  }
+  async function submitPassword() {
+    const cur = el('pw-cur').value, nw = el('pw-new').value, cf = el('pw-conf').value;
+    const msg = el('pw-msg');
+    if (nw !== cf) { msg.textContent = 'La confirmaci\u00f3n no coincide.'; msg.className = 'pw-msg err'; return; }
+    const p = pwPolicy(nw);
+    if (!(p.len && p.letter && p.num && p.user)) { msg.textContent = 'La nueva contrase\u00f1a no cumple la pol\u00edtica.'; msg.className = 'pw-msg err'; return; }
+    setBusy('pw-submit', true);
+    try {
+      await ApiClient.changePassword({ current_password: cur, new_password: nw });
+      msg.textContent = 'Contrase\u00f1a actualizada correctamente.'; msg.className = 'pw-msg ok';
+      ['pw-cur', 'pw-new', 'pw-conf'].forEach((id) => { el(id).value = ''; });
+      updatePwRules();
+      toast('Contrase\u00f1a actualizada. Tus otras sesiones se cerraron.', 'ok');
+      setTimeout(() => renderHub(), 1200);
+    } catch (e) {
+      logError('password/change', e);
+      msg.textContent = e.message || 'No se pudo cambiar la contrase\u00f1a.'; msg.className = 'pw-msg err';
+    } finally { setBusy('pw-submit', false); }
+  }
   async function openPermisos() {
     view('view-permisos');
     const box = el('perm-groups');
@@ -2176,6 +2221,9 @@ const App = (() => {
     el('drawer-hub').addEventListener('click', () => { closeDrawer(); renderHub(); });
     el('drawer-dashboard').addEventListener('click', () => { closeDrawer(); openDashboard(); });
     el('drawer-merma-hist').addEventListener('click', () => { closeDrawer(); openMermaHist(); });
+    el('drawer-password').addEventListener('click', () => { closeDrawer(); openPassword(); });
+    ['pw-cur', 'pw-new', 'pw-conf'].forEach((id) => el(id).addEventListener('input', updatePwRules));
+    el('pw-submit').addEventListener('click', () => submitPassword());
     el('mh-apply').addEventListener('click', () => loadMermaHist().catch(() => {}));
     el('drawer-permisos').addEventListener('click', () => { closeDrawer(); openPermisos(); });
     $$('[data-back]').forEach((b) => b.addEventListener('click', renderHub));
