@@ -207,13 +207,17 @@
     .ali-card.ali-done { border-left-color: #10B981; background: #f5fbf8; }
     #view-alistar, #view-cierre { padding-bottom: 84px; }
     #view-alistar .ali-bar, #view-cierre .ali-bar { position: sticky; top: 0; z-index: 6; background: #f6f4f8; padding: 10px 0; border-bottom: 1px solid #ece8f0; }
-    .ali-cat { font-size: .74rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #642a72; background: #f3edf5; border-radius: 8px; padding: 6px 10px; margin: 12px 0 2px; }
+    .ali-cat { position: sticky; top: 54px; z-index: 4; display: flex; align-items: center; gap: 8px; font-size: .8rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: var(--cat, #642a72); border-radius: 10px; padding: 9px 12px; margin: 16px 0 4px; box-shadow: 0 4px 12px rgba(31,36,48,.14); }
+    .ali-cat-dot { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.9); flex: none; }
+    .ali-cat-name { flex: 1; }
+    .ali-cat-n { background: rgba(255,255,255,.22); border-radius: 999px; padding: 2px 9px; font-size: .74rem; }
+    .ali-grouped { border-left: 5px solid var(--cat, #642a72); margin-left: 4px; }
     .ali-head { display: flex; flex-direction: column; gap: 1px; }
     .ali-meta { font-size: .7rem; font-weight: 700; color: #9ca3af; letter-spacing: .02em; }
-    .ali-name { font-size: 1.02rem; font-weight: 800; color: #1f2430; }
+    .ali-name { font-size: 1.05rem; font-weight: 800; color: #1f2430; }
     .ali-nd { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border: 1px solid #fecaca; border-radius: 10px; background: #fff; cursor: pointer; font-size: .86rem; color: #374151; }
     .ali-nd input { width: 18px; height: 18px; accent-color: #dc2626; }
-    .ali-card.ali-nd-on { border: 1px solid #f87171; background: #fef2f2; }
+    .ali-card.ali-nd-on { border: 1px solid #f87171; border-left: 5px solid #dc2626; background: #fef2f2; }
     .ali-card.ali-nd-on .ali-name { color: #b91c1c; }
     .ali-save-status { text-align: center; font-size: .74rem; color: #9ca3af; margin: 6px 0; min-height: 15px; }
     .ali-save-status.ok { color: #0a7d54; }
@@ -700,10 +704,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711y"></script>
-  <script src="js/metrology.js?v=20260711y"></script>
-  <script src="js/scanner.js?v=20260711y"></script>
-  <script src="js/outbox-service.js?v=20260711y"></script>
-  <script src="js/app.js?v=20260711y"></script>
+  <script src="js/api-client.js?v=20260712a"></script>
+  <script src="js/metrology.js?v=20260712a"></script>
+  <script src="js/scanner.js?v=20260712a"></script>
+  <script src="js/outbox-service.js?v=20260712a"></script>
+  <script src="js/app.js?v=20260712a"></script>
 </body>
 </html>

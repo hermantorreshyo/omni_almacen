@@ -1126,13 +1126,17 @@ const App = (() => {
         header = d.transfer || t;
         items = d.items || d.details || [];
       } catch (e) { logError('picking/detalle', e); items = await transferItems(t); }
-      const catMap = await skuCatMap(items.map((it) => it.item_id));   // categoría por item_id
+      // Opción B: el detalle del traspaso ya trae category_name/pick_sequence/family por ítem.
+      // El cruce con catálogo queda solo como fallback (ítems supplier_item o datos faltantes).
+      const faltaCat = items.some((it) => it.item_type === 'sku' && !it.category_name);
+      const catMap = faltaCat ? await skuCatMap(items.map((it) => it.item_id)) : {};
       const enriched = items.map((it) => {
         const meta = catMap[String(it.item_id)] || {};
         const picked = Number(it.quantity_picked ?? it.quantity_requested ?? 0);
         return {
           ...it,
-          category: it.category_name || meta.category || meta.item_type || 'Sin categoría',
+          category: it.category_name || meta.category || 'Sin categoría',
+          pickSeq: it.pick_sequence != null ? Number(it.pick_sequence) : (meta.pick_sequence ?? null),
           sku_code: it.sku_final_code || meta.sku_final_code || '',
           despachada: picked,
           obs: it.picking_notes || '',
@@ -1140,23 +1144,31 @@ const App = (() => {
           done: false,
         };
       });
-      // Orden por categoría y, dentro, por nombre → recorrido ordenado del almacén.
-      enriched.sort((a, b) => String(a.category).localeCompare(String(b.category)) ||
-                              String(itemLabel(a)).localeCompare(String(itemLabel(b))));
+      // Orden: pick_sequence del recorrido (menor primero); sin definir → alfabético.
+      // Los ítems sin categoría (supplier_item) van al final.
+      enriched.sort((a, b) => {
+        const sa = a.pickSeq, sb = b.pickSeq;
+        if (sa != null && sb != null && sa !== sb) return sa - sb;
+        if (sa != null && sb == null) return -1;
+        if (sa == null && sb != null) return 1;
+        return String(a.category).localeCompare(String(b.category)) ||
+               String(itemLabel(a)).localeCompare(String(itemLabel(b)));
+      });
       state.ctx = { traspaso: t, header, items: enriched };
       renderAlistar();
     } catch (e) { logError('picking/abrir', e); toast(e.message || 'No se pudo abrir el alistado.', 'err'); }
   }
-  /* Mapa item_id → {category, sku_final_code, item_type} desde el catálogo. */
+  /* Fallback: mapa item_id → {category, pick_sequence, sku_final_code} desde el catálogo.
+     Solo se usa si el detalle del traspaso no trajo la categoría (ítems supplier_item). */
   async function skuCatMap(ids) {
     const map = {};
     try {
       const all = await fetchAllSkus({ status: 'active', limit: 400 });
       all.forEach((s) => {
         map[String(s.id)] = {
-          category: s.category_name || s.category || s.family_name || s.item_type || '',
+          category: s.category_name || s.family_name || '',
+          pick_sequence: s.pick_sequence != null ? Number(s.pick_sequence) : null,
           sku_final_code: s.sku_final_code || '',
-          item_type: s.item_type || '',
         };
       });
     } catch (e) { logError('picking/catmap', e); }
@@ -1168,15 +1180,24 @@ const App = (() => {
     el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
     el('alistar-sub').textContent = `Solicita: ${intNameById(destIntOf(h))}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
     const grid = el('alistar-grid'); grid.innerHTML = '';
-    let lastCat = null;
+    // Cuenta de ítems por categoría (para el badge del encabezado).
+    const catCount = {};
+    state.ctx.items.forEach((it) => { catCount[it.category] = (catCount[it.category] || 0) + 1; });
+    let lastCat = null, catIdx = -1;
+    const CAT_COLORS = ['#642a72', '#2563eb', '#0a7d54', '#b45309', '#be185d', '#0e7490', '#7c3aed'];
     state.ctx.items.forEach((it, i) => {
       const sol = Number(it.quantity_requested ?? 0);
-      if (it.category !== lastCat) {                        // encabezado de categoría
-        lastCat = it.category;
-        const hd = document.createElement('div'); hd.className = 'ali-cat'; hd.textContent = it.category;
+      if (it.category !== lastCat) {                        // banda de categoría
+        lastCat = it.category; catIdx++;
+        const color = CAT_COLORS[catIdx % CAT_COLORS.length];
+        const hd = document.createElement('div'); hd.className = 'ali-cat';
+        hd.style.setProperty('--cat', color);
+        hd.innerHTML = `<span class="ali-cat-dot"></span><span class="ali-cat-name">${it.category}</span><span class="ali-cat-n">${catCount[it.category]}</span>`;
         grid.appendChild(hd);
       }
-      const card = document.createElement('div'); card.className = 'ali-card' + (it.nodespacho ? ' ali-nd-on' : ''); card.id = `ali-card-${i}`;
+      const color = CAT_COLORS[catIdx % CAT_COLORS.length];
+      const card = document.createElement('div'); card.className = 'ali-card ali-grouped' + (it.nodespacho ? ' ali-nd-on' : ''); card.id = `ali-card-${i}`;
+      card.style.setProperty('--cat', color);
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" /><span class="ali-head">
           <span class="ali-meta">${[it.sku_code, it.category].filter(Boolean).join(' · ')}</span>
