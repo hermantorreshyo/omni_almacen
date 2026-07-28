@@ -188,6 +188,7 @@ const App = (() => {
 
   /* Fase 3: cabecera, pantallas y hub. */
   async function finishAuth() {
+    state.interlocutorType = null;   // se recalcula por sede (requestable_for)
     el('hdr-sede').textContent = state.interlocutorName || 'Sede';
     el('hdr-user').textContent = state.user.username || state.user.nombre || '—';
     el('hdr-rol').textContent  = state.rol || '—';
@@ -760,7 +761,21 @@ const App = (() => {
     } catch (e) { logError('sol/freq', e); }
     return f;
   }
+  /* Tipo de la sede activa (para requestable_for). Se resuelve una vez y se cachea. */
+  async function sedeType() {
+    if (state.interlocutorType) return state.interlocutorType;
+    const id = state.interlocutor;
+    if (!id) return null;
+    try {
+      const r = await ApiClient.catalog('interlocutors', {});
+      const me = rowsOf(r.data).find((x) => Number(x.id) === Number(id));
+      if (me && me.type) { state.interlocutorType = me.type; return me.type; }
+    } catch (e) { logError('sede/type', e); }
+    return null;
+  }
   async function fetchAllSkus(base) {
+    const type = await sedeType();
+    if (type) base = { ...base, requestable_for: type };   // oculta SKU no solicitables por esta sede
     const [gen, pt] = await Promise.all([                        // el API omite PT por defecto
       ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
       ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
@@ -790,15 +805,12 @@ const App = (() => {
         renderSolCards(); return;
       }
       if (type) {
-        rows = rowsOf((await ApiClient.catalog('skus', { ...base, item_type: type })).data);
+        const st = await sedeType();
+        const p = { ...base, item_type: type };
+        if (st) p.requestable_for = st;
+        rows = rowsOf((await ApiClient.catalog('skus', p)).data);
       } else {
-        const [gen, pt] = await Promise.all([
-          ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
-          ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
-        ]);
-        const seen = new Set();
-        rows = [...rowsOf(gen.data), ...rowsOf(pt.data)]
-          .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true; });
+        rows = await fetchAllSkus(base);   // incluye requestable_for + fusión con PT
       }
       state.ctx.skus = rows.filter((s) => (s.status ?? 'active') === 'active')
         .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
@@ -822,6 +834,7 @@ const App = (() => {
       const step = unit === 'ud' ? 1 : 100;               // g/ml → pasos de 100
       const card = document.createElement('div');
       card.className = 'sol-card' + (qty > 0 ? ' picked' : '');
+      card.id = `sol-card-${s.id}`;
       card.innerHTML = `
         <div class="sol-card-main">
           <div class="sol-card-top">
@@ -932,7 +945,19 @@ const App = (() => {
         }
       }
       setDraftStatus('saved');
-    } catch (e) { logError('draft/sync', e); setDraftStatus('error'); throw e; }
+    } catch (e) {
+      logError('draft/sync', e);
+      // El core rechaza SKU no solicitables por este tipo de sede.
+      if (e && (e.code === 'ERR_SKU_NOT_REQUESTABLE' || /no está disponible para solicitar/i.test(e.message || ''))) {
+        delete state.ctx.qty[id];                    // deshacer la selección inválida
+        const card = document.getElementById(`sol-card-${id}`);
+        if (card) { const v = card.querySelector('.stp-val'); if (v) v.value = '0'; card.classList.remove('picked'); }
+        toast(e.message || 'Ese ítem no puede solicitarse desde esta sede.', 'err');
+        updateSolCta();
+        return;
+      }
+      setDraftStatus('error'); throw e;
+    }
   }
   async function refreshDraftRows() {
     if (!state.ctx.draftId) return;
