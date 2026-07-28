@@ -207,6 +207,17 @@
     .ali-card.ali-done { border-left-color: #10B981; background: #f5fbf8; }
     #view-alistar, #view-cierre { padding-bottom: 84px; }
     #view-alistar .ali-bar, #view-cierre .ali-bar { position: sticky; top: 0; z-index: 6; background: #f6f4f8; padding: 10px 0; border-bottom: 1px solid #ece8f0; }
+    .ali-cat { font-size: .74rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #642a72; background: #f3edf5; border-radius: 8px; padding: 6px 10px; margin: 12px 0 2px; }
+    .ali-head { display: flex; flex-direction: column; gap: 1px; }
+    .ali-meta { font-size: .7rem; font-weight: 700; color: #9ca3af; letter-spacing: .02em; }
+    .ali-name { font-size: 1.02rem; font-weight: 800; color: #1f2430; }
+    .ali-nd { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border: 1px solid #fecaca; border-radius: 10px; background: #fff; cursor: pointer; font-size: .86rem; color: #374151; }
+    .ali-nd input { width: 18px; height: 18px; accent-color: #dc2626; }
+    .ali-card.ali-nd-on { border: 1px solid #f87171; background: #fef2f2; }
+    .ali-card.ali-nd-on .ali-name { color: #b91c1c; }
+    .ali-save-status { text-align: center; font-size: .74rem; color: #9ca3af; margin: 6px 0; min-height: 15px; }
+    .ali-save-status.ok { color: #0a7d54; }
+    .ali-save-status.err { color: #b45309; }
     #alistar-confirm, #cierre-confirm { position: sticky; bottom: 12px; box-shadow: 0 8px 24px rgba(100,42,114,.18); }
     .ali-card .ali-check b { font-size: 1.05rem; }
     .ali-card .num { font-size: 1.1rem; font-weight: 700; }
@@ -530,8 +541,8 @@
       </div>
       <div id="alistar-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
       <div style="height:12px;"></div>
-      <button id="alistar-save" class="btn-ghost btn-save-adv">💾 Guardar avance (seguir después)</button>
-      <button id="alistar-confirm" class="btn-ok" disabled>Marcar LISTO_DESPACHO</button>
+      <div id="ali-save-status" class="ali-save-status"></div>
+      <button id="alistar-confirm" class="btn-ok" disabled>Confirmar y marcar LISTO_DESPACHO</button>
     </section>
 
     <!-- ── FLUJO 3D: TRANSPORTE ─────────────────────────────────── -->
@@ -689,10 +700,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260711x"></script>
-  <script src="js/metrology.js?v=20260711x"></script>
-  <script src="js/scanner.js?v=20260711x"></script>
-  <script src="js/outbox-service.js?v=20260711x"></script>
-  <script src="js/app.js?v=20260711x"></script>
+  <script src="js/api-client.js?v=20260711y"></script>
+  <script src="js/metrology.js?v=20260711y"></script>
+  <script src="js/scanner.js?v=20260711y"></script>
+  <script src="js/outbox-service.js?v=20260711y"></script>
+  <script src="js/app.js?v=20260711y"></script>
 </body>
 </html>

@@ -1126,17 +1126,41 @@ const App = (() => {
         header = d.transfer || t;
         items = d.items || d.details || [];
       } catch (e) { logError('picking/detalle', e); items = await transferItems(t); }
-      state.ctx = {
-        traspaso: t, header,
-        items: items.map((it) => ({
+      const catMap = await skuCatMap(items.map((it) => it.item_id));   // categoría por item_id
+      const enriched = items.map((it) => {
+        const meta = catMap[String(it.item_id)] || {};
+        const picked = Number(it.quantity_picked ?? it.quantity_requested ?? 0);
+        return {
           ...it,
-          despachada: Number(it.quantity_picked ?? it.quantity_requested ?? 0),   // reabre con lo ya alistado
+          category: it.category_name || meta.category || meta.item_type || 'Sin categoría',
+          sku_code: it.sku_final_code || meta.sku_final_code || '',
+          despachada: picked,
           obs: it.picking_notes || '',
+          nodespacho: picked <= 0 && (it.quantity_picked != null),   // reabre marcado si ya iba en 0
           done: false,
-        })),
-      };
+        };
+      });
+      // Orden por categoría y, dentro, por nombre → recorrido ordenado del almacén.
+      enriched.sort((a, b) => String(a.category).localeCompare(String(b.category)) ||
+                              String(itemLabel(a)).localeCompare(String(itemLabel(b))));
+      state.ctx = { traspaso: t, header, items: enriched };
       renderAlistar();
     } catch (e) { logError('picking/abrir', e); toast(e.message || 'No se pudo abrir el alistado.', 'err'); }
+  }
+  /* Mapa item_id → {category, sku_final_code, item_type} desde el catálogo. */
+  async function skuCatMap(ids) {
+    const map = {};
+    try {
+      const all = await fetchAllSkus({ status: 'active', limit: 400 });
+      all.forEach((s) => {
+        map[String(s.id)] = {
+          category: s.category_name || s.category || s.family_name || s.item_type || '',
+          sku_final_code: s.sku_final_code || '',
+          item_type: s.item_type || '',
+        };
+      });
+    } catch (e) { logError('picking/catmap', e); }
+    return map;
   }
   function renderAlistar() {
     view('view-alistar');
@@ -1144,37 +1168,50 @@ const App = (() => {
     el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
     el('alistar-sub').textContent = `Solicita: ${intNameById(destIntOf(h))}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
     const grid = el('alistar-grid'); grid.innerHTML = '';
+    let lastCat = null;
     state.ctx.items.forEach((it, i) => {
       const sol = Number(it.quantity_requested ?? 0);
-      const card = document.createElement('div'); card.className = 'ali-card'; card.id = `ali-card-${i}`;
+      if (it.category !== lastCat) {                        // encabezado de categoría
+        lastCat = it.category;
+        const hd = document.createElement('div'); hd.className = 'ali-cat'; hd.textContent = it.category;
+        grid.appendChild(hd);
+      }
+      const card = document.createElement('div'); card.className = 'ali-card' + (it.nodespacho ? ' ali-nd-on' : ''); card.id = `ali-card-${i}`;
       card.innerHTML = `
-        <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" /><b>${itemLabel(it)}</b></label>
+        <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" /><span class="ali-head">
+          <span class="ali-meta">${[it.sku_code, it.category].filter(Boolean).join(' · ')}</span>
+          <b class="ali-name">${itemLabel(it)}</b>
+        </span></label>
         <div class="oc-card-sub">Solicitada: <b>${sol}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
         <div class="oc-row2">
           <div><div class="field-label">Despachada</div>
-            <input id="ali-qty-${i}" class="num" type="number" min="0" step="0.01" inputmode="decimal" value="${sol}" /></div>
-          <div><div class="field-label">Observación</div><input id="ali-obs-${i}" class="txt" placeholder="Opcional…" /></div>
+            <input id="ali-qty-${i}" class="num" type="number" min="0" step="0.01" inputmode="decimal" value="${it.despachada}" /></div>
+          <div><div class="field-label">Observación</div><input id="ali-obs-${i}" class="txt" placeholder="Opcional…" value="${(it.obs || '').replace(/"/g, '&quot;')}" /></div>
         </div>
         <div id="ali-warn-${i}" class="ali-warn hidden">⚠️ Mayor al solicitado</div>
-        <button id="ali-zero-${i}" class="btn-zero">Sin stock (0)</button>`;
+        <label class="ali-nd"><input type="checkbox" id="ali-nd-${i}" ${it.nodespacho ? 'checked' : ''} /><span>No despachado</span></label>`;
       grid.appendChild(card);
       setTimeout(() => {
-        const q = el(`ali-qty-${i}`), chk = el(`ali-chk-${i}`), obs = el(`ali-obs-${i}`), warn = el(`ali-warn-${i}`);
+        const q = el(`ali-qty-${i}`), chk = el(`ali-chk-${i}`), obs = el(`ali-obs-${i}`), warn = el(`ali-warn-${i}`), nd = el(`ali-nd-${i}`);
         const sync = () => {
           const v = Math.max(0, Number(q.value) || 0);      // sin tope superior; 0 permitido
           it.despachada = Math.round(v * 100) / 100;        // 2 decimales
           warn.classList.toggle('hidden', it.despachada <= sol);
-          // La observación es obligatoria si la cantidad difiere de la solicitada.
           const distinto = it.despachada !== sol;
-          obs.classList.toggle('obs-req', distinto);
+          obs.classList.toggle('obs-req', distinto && !it.nodespacho);
           obs.placeholder = distinto ? 'Obligatoria: explica la diferencia…' : 'Opcional…';
+          scheduleAliSave();                                // autoguardado
         };
         q.addEventListener('input', sync);
-        obs.addEventListener('input', () => { it.obs = obs.value; });
-        el(`ali-zero-${i}`).addEventListener('click', () => {   // atajo: sin existencias
-          q.value = '0'; sync();
-          if (!obs.value.trim()) { obs.value = 'Sin stock'; it.obs = 'Sin stock'; }
+        obs.addEventListener('input', () => { it.obs = obs.value; scheduleAliSave(); });
+        nd.addEventListener('change', () => {
+          it.nodespacho = nd.checked;
+          card.classList.toggle('ali-nd-on', nd.checked);
+          if (nd.checked) { it.despachada = 0; q.value = '0'; q.disabled = true; if (!obs.value.trim()) { obs.value = 'No despachado'; it.obs = 'No despachado'; } }
+          else { q.disabled = false; }
+          sync();
         });
+        if (it.nodespacho) q.disabled = true;
         chk.addEventListener('change', () => {
           it.done = chk.checked;
           card.classList.toggle('ali-done', chk.checked);
@@ -1184,6 +1221,20 @@ const App = (() => {
     });
     el('ali-all').checked = false;
     updateAliProgress();
+  }
+  /* Autoguardado del alistamiento (PATCH /picking-items) — NO cambia de estado.
+     El pedido pasa a LISTO_DESPACHO solo con el botón Confirmar. */
+  function scheduleAliSave() {
+    clearTimeout(state.ctx._aliTimer);
+    setAliStatus('saving');
+    state.ctx._aliTimer = setTimeout(() => {
+      savePickingItems().then(() => setAliStatus('saved')).catch(() => setAliStatus('error'));
+    }, 700);
+  }
+  function setAliStatus(s) {
+    const e = el('ali-save-status'); if (!e) return;
+    e.textContent = s === 'saving' ? 'Guardando…' : s === 'saved' ? '✓ Guardado' : s === 'error' ? '⚠ Sin guardar' : '';
+    e.className = 'ali-save-status' + (s === 'error' ? ' err' : s === 'saved' ? ' ok' : '');
   }
   function updateAliProgress() {
     const total = state.ctx.items.length;
@@ -1206,8 +1257,12 @@ const App = (() => {
     return ApiClient.pickingItems({
       traspaso_id: tId(state.ctx.traspaso),
       items: items.map((it) => {
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_picked: Math.round((Number(it.despachada) || 0) * 100) / 100 };
-        if (it.obs.trim()) o.notes = it.obs.trim();
+        const q = it.nodespacho ? 0 : Math.round((Number(it.despachada) || 0) * 100) / 100;
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_picked: q };
+        const note = it.nodespacho
+          ? ('NO DESPACHADO' + (it.obs.trim() && it.obs.trim() !== 'No despachado' ? ' — ' + it.obs.trim() : ''))
+          : it.obs.trim();
+        if (note) o.notes = note;
         return o;
       }),
     });
@@ -1224,33 +1279,35 @@ const App = (() => {
   async function confirmAlistar() {
     const items = state.ctx.items;
     if (!items.every((it) => it.done)) { toast('Marca todos los ítems como alistados.', 'warn'); return; }
-    const diff = items.find((it) => Number(it.despachada) !== Number(it.quantity_requested ?? 0) && !it.obs.trim());
+    const diff = items.find((it) => !it.nodespacho && Number(it.despachada) !== Number(it.quantity_requested ?? 0) && !it.obs.trim());
     if (diff) {
       const menor = Number(diff.despachada) < Number(diff.quantity_requested ?? 0);
       toast(`Observación obligatoria en "${itemLabel(diff)}" por despachar ${menor ? 'menos' : 'más'} de lo solicitado.`, 'warn');
       return;
     }
 
-    // El API acepta quantity_dispatched = 0 (ítem revisado sin stock) y guarda notes.
-    const ceros = items.filter((it) => Number(it.despachada) <= 0);
-    const notas = items.filter((it) => it.obs.trim())
-      .map((it) => `${itemLabel(it)}: ${it.obs.trim()}`).join(' | ');
+    const nd = items.filter((it) => it.nodespacho);
+    const notas = items.filter((it) => it.obs.trim() || it.nodespacho)
+      .map((it) => `${itemLabel(it)}: ${it.nodespacho ? 'NO DESPACHADO' : ''}${it.obs.trim() && it.obs.trim() !== 'No despachado' ? (it.nodespacho ? ' — ' : '') + it.obs.trim() : ''}`)
+      .join(' | ');
 
     // 1) Guardar la cantidad confirmada y la observación por ítem.
     //    El traspaso ya está EN_PICKING → PATCH /picking-items (PUT /picking solo sirve
     //    para la transición SOLICITADO → EN_PICKING y fallaría con ERR_STATE).
     await savePickingItems();
-    // 2) Despachar → LISTO_DESPACHO (quantity_dispatched + notas agregadas).
+    // 2) Despachar → LISTO_DESPACHO (quantity_dispatched = 0 en no despachados).
     const payload = {
       traspaso_id: tId(state.ctx.traspaso),
       notes: notas,
       items: items.map((it) => {
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: Math.round((Number(it.despachada) || 0) * 100) / 100 };
-        if (it.obs.trim()) o.notes = it.obs.trim();
+        const q = it.nodespacho ? 0 : Math.round((Number(it.despachada) || 0) * 100) / 100;
+        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: q };
+        const note = it.nodespacho ? ('NO DESPACHADO' + (it.obs.trim() && it.obs.trim() !== 'No despachado' ? ' — ' + it.obs.trim() : '')) : it.obs.trim();
+        if (note) o.notes = note;
         return o;
       }),
     };
-    if (ceros.length) toast(`${ceros.length} ítem(s) se despachan en 0 (sin stock).`, 'warn');
+    if (nd.length) toast(`${nd.length} ítem(s) marcados como NO DESPACHADO.`, 'warn');
     await sendTx('picking_alistar', payload, 'Traspaso LISTO_DESPACHO (en tránsito).');
     openPicking();
   }
@@ -2121,7 +2178,6 @@ const App = (() => {
     el('sol-confirm').addEventListener('click', () => confirmSolicitar().catch(() => {}));
     el('alistar-confirm').addEventListener('click', () => confirmAlistar().catch(() => {}));
     el('ali-all').addEventListener('change', (e) => toggleAliAll(e.target.checked));
-    el('alistar-save').addEventListener('click', () => guardarAvancePicking());
     el('cierre-confirm').addEventListener('click', () => confirmCierre().catch(() => {}));
     el('cie-all').addEventListener('change', (e) => toggleCieAll(e.target.checked));
     // Mermas
