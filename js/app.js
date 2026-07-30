@@ -1085,6 +1085,12 @@ const App = (() => {
     const f = (state.catalogs.interlocutors || []).find((x) => Number(x.id) === Number(id));
     return f ? intName(f) : (id != null ? 'Interlocutor ' + id : '—');
   }
+  /* Nombre del solicitante (destino) de un traspaso: usa campos del propio
+     traspaso si vienen, y si no, resuelve por catálogo. */
+  function solicitanteName(t) {
+    return t.dest_sede || t.dest_interlocutor_name || t.interlocutor_name_dest ||
+           t.destination_name || intNameById(destIntOf(t));
+  }
   function originIntOf(t) {
     if (t.interlocutor_id_origin != null) return Number(t.interlocutor_id_origin);
     const l = (state.catalogs.locations || []).find((x) => Number(x.id) === Number(t.location_id_origin));
@@ -1717,6 +1723,7 @@ const App = (() => {
     el('dash-states').innerHTML = '';
     el('dash-list').innerHTML = '';
     try {
+      await ensureCatalogs(['interlocutors', 'locations']);   // para resolver nombres de sede
       const r = await ApiClient.traspasos();        // sin filtro: todos los del interlocutor
       const rows = rowsOf(r.data);
       renderDashboard(rows);
@@ -1757,7 +1764,7 @@ const App = (() => {
     list.innerHTML = `<div class="perm-card-h" style="margin:14px 0 8px;">Detalle</div>`;
     rows.slice(0, 25).forEach((t) => {
       const n = itemCount(t);
-      const solicitante = intNameById(destIntOf(t));            // el destino es quien solicitó
+      const solicitante = solicitanteName(t);                  // el destino es quien solicitó
       const c = document.createElement('div'); c.className = 'rowcard rowcard-exp';
       c.innerHTML = `<div><b>${solicitante} · #${tId(t)}</b><small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small></div>
         <span class="chip">${tState(t).replace(/_/g, ' ')}</span>`;
@@ -1768,10 +1775,18 @@ const App = (() => {
           det.innerHTML = '<div class="skel"></div>';
           const items = await transferItems(t);
           det.dataset.loaded = '1';
-          det.innerHTML = items.length
-            ? items.map((it) => `<div class="dash-det-row"><span>${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</span>
-                <b>${fmtQty(it.quantity_requested ?? it.quantity ?? 0)}</b></div>`).join('')
-            : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
+          det.innerHTML = items.length ? '' : '<div class="td-empty">Sin ítems.</div>';
+          items.forEach((it) => {
+            const row = document.createElement('div'); row.className = 'td-item';
+            const meta = [it.sku_final_code, it.category_name].filter(Boolean).join(' · ');
+            row.innerHTML = `
+              <div class="td-item-main">
+                ${meta ? `<div class="td-item-meta">${meta}</div>` : ''}
+                <div class="td-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
+              </div>
+              <div class="td-item-qty">${fmtQty(it.quantity_requested ?? it.quantity ?? 0)}<span>${it.unit || 'ud'}</span></div>`;
+            det.appendChild(row);
+          });
         }
       });
       list.appendChild(c); list.appendChild(det);
