@@ -1765,8 +1765,14 @@ const App = (() => {
     rows.slice(0, 25).forEach((t) => {
       const n = itemCount(t);
       const solicitante = solicitanteName(t);                  // el destino es quien solicitó
+      const origen = intNameById(originIntOf(t));
+      const fecha = transferDate(t) ? fmtDT(transferDate(t)) : '';
       const c = document.createElement('div'); c.className = 'rowcard rowcard-exp';
-      c.innerHTML = `<div><b>${solicitante} · #${tId(t)}</b><small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small></div>
+      c.innerHTML = `<div class="td-head">
+          <b>${solicitante} · #${tId(t)}</b>
+          <small class="td-route">${origen} → ${solicitante}${fecha ? ' · ' + fecha : ''}</small>
+          <small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small>
+        </div>
         <span class="chip">${tState(t).replace(/_/g, ' ')}</span>`;
       const det = document.createElement('div'); det.className = 'dash-det hidden';
       c.addEventListener('click', async () => {
