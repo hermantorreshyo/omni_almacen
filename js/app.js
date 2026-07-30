@@ -1075,6 +1075,12 @@ const App = (() => {
 
 
   // Helpers de traspaso (resolver interlocutores y fecha)
+  /* Política de visualización: el dato viaja a 4 decimales; en pantalla se muestra a 2. */
+  function fmtQty(v) {
+    const n = Number(v);
+    if (!isFinite(n)) return '0';
+    return (Math.round(n * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
   function intNameById(id) {
     const f = (state.catalogs.interlocutors || []).find((x) => Number(x.id) === Number(id));
     return f ? intName(f) : (id != null ? 'Interlocutor ' + id : '—');
@@ -1248,7 +1254,7 @@ const App = (() => {
           <span class="ali-meta">${[it.sku_code, it.category].filter(Boolean).join(' · ')}</span>
           <b class="ali-name">${itemLabel(it)}</b>
         </span></label>
-        <div class="oc-card-sub">Solicitada: <b>${sol}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
+        <div class="oc-card-sub">Solicitada: <b>${fmtQty(sol)}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
         <div class="oc-row2">
           <div><div class="field-label">Despachada</div>
             <input id="ali-qty-${i}" class="num" type="number" min="0" step="0.01" inputmode="decimal" value="${it.despachada}" /></div>
@@ -1453,7 +1459,7 @@ const App = (() => {
         det.innerHTML = '<div class="skel"></div>';
         const items = await transferItems(t); det.dataset.loaded = '1';
         det.innerHTML = items.length ? items.map((it) =>
-          `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${it.quantity_dispatched ?? it.quantity_requested ?? 0}</b></div>`).join('')
+          `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${fmtQty(it.quantity_dispatched ?? it.quantity_requested ?? 0)}</b></div>`).join('')
           : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
       }
     });
@@ -1557,7 +1563,7 @@ const App = (() => {
     det.innerHTML = '<div class="skel"></div>';
     transferItems(t).then((items) => {                       // contenido siempre visible
       det.innerHTML = items.length ? items.map((it) =>
-        `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${it.quantity_dispatched ?? it.quantity_requested ?? 0}</b></div>`).join('')
+        `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${fmtQty(it.quantity_dispatched ?? it.quantity_requested ?? 0)}</b></div>`).join('')
         : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
     }).catch(() => { det.innerHTML = '<div class="dash-det-row"><span>Sin ítems.</span></div>'; });
     const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
@@ -1615,14 +1621,14 @@ const App = (() => {
         <div class="cie-qty-grid">
           <div class="cie-qty-box">
             <span class="cie-qty-lbl">Pedida</span>
-            <span class="cie-qty-big">${ped}</span>
+            <span class="cie-qty-big">${fmtQty(ped)}</span>
           </div>
           <div class="cie-qty-box">
             <span class="cie-qty-lbl">Despachada</span>
-            <span class="cie-qty-big ${faltante ? 'cie-qty-warn' : ''}">${env}${faltante ? ' ⚠️' : ''}</span>
+            <span class="cie-qty-big ${faltante ? 'cie-qty-warn' : ''}">${fmtQty(env)}${faltante ? ' ⚠️' : ''}</span>
           </div>
         </div>
-        ${faltante ? `<div class="cie-falta">Llegan ${ped - env} ${it.unit || 'ud'} menos de lo pedido.</div>` : ''}
+        ${faltante ? `<div class="cie-falta">Llegan ${fmtQty(ped - env)} ${it.unit || 'ud'} menos de lo pedido.</div>` : ''}
         ${it.batch_reference ? `<div class="oc-card-sub">Lote ${it.batch_reference}</div>` : ''}
         ${pickObs ? `<div class="cie-pickobs"><b>Nota del almacén:</b> ${pickObs}</div>` : ''}
         <label class="cie-flag"><input type="checkbox" id="cie-nr-${i}" /><span>No recibido en tienda <em class="cie-hint">· se registra como merma en tránsito</em></span></label>
@@ -1751,8 +1757,9 @@ const App = (() => {
     list.innerHTML = `<div class="perm-card-h" style="margin:14px 0 8px;">Detalle</div>`;
     rows.slice(0, 25).forEach((t) => {
       const n = itemCount(t);
+      const solicitante = intNameById(destIntOf(t));            // el destino es quien solicitó
       const c = document.createElement('div'); c.className = 'rowcard rowcard-exp';
-      c.innerHTML = `<div><b>Traspaso #${tId(t)}</b><small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small></div>
+      c.innerHTML = `<div><b>${solicitante} · #${tId(t)}</b><small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small></div>
         <span class="chip">${tState(t).replace(/_/g, ' ')}</span>`;
       const det = document.createElement('div'); det.className = 'dash-det hidden';
       c.addEventListener('click', async () => {
@@ -1763,7 +1770,7 @@ const App = (() => {
           det.dataset.loaded = '1';
           det.innerHTML = items.length
             ? items.map((it) => `<div class="dash-det-row"><span>${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</span>
-                <b>${it.quantity_requested ?? it.quantity ?? 0}</b></div>`).join('')
+                <b>${fmtQty(it.quantity_requested ?? it.quantity ?? 0)}</b></div>`).join('')
             : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
         }
       });
@@ -1807,7 +1814,7 @@ const App = (() => {
       const total = rows.reduce((s, m) => s + Math.abs(Number(m.quantity ?? m.cantidad ?? 0)), 0);
       const tot = el('mh-total');
       tot.classList.remove('hidden');
-      tot.innerHTML = `<div class="mh-total-n">${rows.length}</div><div>registros · <b>${Math.round(total * 100) / 100}</b> uds dadas de baja</div>`;
+      tot.innerHTML = `<div class="mh-total-n">${rows.length}</div><div>registros · <b>${fmtQty(total)}</b> uds dadas de baja</div>`;
       renderMermaKpis(rows);
       list.innerHTML = '';
       rows.forEach((m) => list.appendChild(mermaHistCard(m)));
@@ -1839,7 +1846,7 @@ const App = (() => {
     wrap.innerHTML = '';
     entries.forEach(([causa, v]) => {
       const card = document.createElement('div'); card.className = 'mh-kpi';
-      card.innerHTML = `<div class="mh-kpi-q">${Math.round(v.q * 100) / 100}</div>
+      card.innerHTML = `<div class="mh-kpi-q">${fmtQty(v.q)}</div>
         <div class="mh-kpi-c">${causa}</div>
         <div class="mh-kpi-n">${v.n} registro${v.n > 1 ? 's' : ''}</div>`;
       wrap.appendChild(card);
@@ -1853,7 +1860,7 @@ const App = (() => {
     const nombre = m._name || m.item_name || m.sku_name || ('SKU ' + (m.item_id ?? ''));
     const codigo = m.sku_final_code || m.item_code || '';
     c.innerHTML = `<div class="rowcard-top"><b>${nombre}</b>
-      <span class="mh-qty">−${qty} ${m.unit || 'ud'}</span></div>
+      <span class="mh-qty">−${fmtQty(qty)} ${m.unit || 'ud'}</span></div>
       <small class="tp-sub">${[codigo, m.reason || m.motivo || '—'].filter(Boolean).join(' · ')}${fecha ? ' · ' + fmtDT(fecha) : ''}</small>`;
     const det = document.createElement('div'); det.className = 'dash-det hidden';
     det.innerHTML = `
