@@ -253,6 +253,11 @@
     .pw-msg.err { color: #b91c1c; }
     .mh-total { display: flex; align-items: center; gap: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; color: #7f1d1d; font-size: .9rem; }
     .mh-total-n { font-size: 1.6rem; font-weight: 800; color: #b91c1c; line-height: 1; }
+    .mh-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+    .mh-kpi { background: #fff; border: 1px solid #ece8f0; border-left: 4px solid #EF4444; border-radius: 12px; padding: 10px 12px; }
+    .mh-kpi-q { font-size: 1.3rem; font-weight: 800; color: #1f2430; line-height: 1; }
+    .mh-kpi-c { font-size: .78rem; font-weight: 700; color: #642a72; margin-top: 3px; }
+    .mh-kpi-n { font-size: .7rem; color: #9ca3af; margin-top: 1px; }
     .mh-qty { font-weight: 800; color: #b91c1c; white-space: nowrap; }
     .mh-foto { width: 100%; border-radius: 12px; margin-top: 8px; display: block; }
     .mh-foto-link { display: block; }
@@ -431,6 +436,7 @@
       </div>
       <button id="mh-apply" class="btn-prim" style="margin-bottom:14px;">Consultar</button>
       <div id="mh-total" class="mh-total hidden"></div>
+      <div id="mh-kpis" class="mh-kpis"></div>
       <div id="mh-list"></div>
     </section>
 
@@ -737,10 +743,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260712b"></script>
-  <script src="js/metrology.js?v=20260712b"></script>
-  <script src="js/scanner.js?v=20260712b"></script>
-  <script src="js/outbox-service.js?v=20260712b"></script>
-  <script src="js/app.js?v=20260712b"></script>
+  <script src="js/api-client.js?v=20260712c"></script>
+  <script src="js/metrology.js?v=20260712c"></script>
+  <script src="js/scanner.js?v=20260712c"></script>
+  <script src="js/outbox-service.js?v=20260712c"></script>
+  <script src="js/app.js?v=20260712c"></script>
 </body>
 </html>

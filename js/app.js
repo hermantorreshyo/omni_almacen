@@ -1790,31 +1790,71 @@ const App = (() => {
   async function loadMermaHist() {
     const list = el('mh-list'); list.innerHTML = skeleton();
     el('mh-total').classList.add('hidden');
+    const kpis = el('mh-kpis'); if (kpis) kpis.innerHTML = '';
     const params = { interlocutor_id: state.interlocutor };   // solo mi sede
     const f = el('mh-from').value, t = el('mh-to').value;
     if (f) params.date_from = f;
     if (t) params.date_to = t;
     try {
       const r = await ApiClient.kardexMermas(params);
-      const rows = rowsOf(r.data)
+      let rows = rowsOf(r.data)
         .sort((a, b) => String(b.created_at || b.movement_date || '').localeCompare(String(a.created_at || a.movement_date || '')));
       if (!rows.length) { list.innerHTML = empty('Sin mermas en el rango seleccionado.'); return; }
+      // Nombre legible del SKU: si el kardex no lo trae, cruzar con el catálogo.
+      const nameMap = await skuNameMap(rows.map((m) => m.item_id));
+      rows = rows.map((m) => ({ ...m, _name: m.item_name || m.sku_name || nameMap[String(m.item_id)] || null }));
+
       const total = rows.reduce((s, m) => s + Math.abs(Number(m.quantity ?? m.cantidad ?? 0)), 0);
       const tot = el('mh-total');
       tot.classList.remove('hidden');
       tot.innerHTML = `<div class="mh-total-n">${rows.length}</div><div>registros · <b>${Math.round(total * 100) / 100}</b> uds dadas de baja</div>`;
+      renderMermaKpis(rows);
       list.innerHTML = '';
       rows.forEach((m) => list.appendChild(mermaHistCard(m)));
     } catch (e) { logError('merma/hist', e); list.innerHTML = apiErrorBox([e]); }
+  }
+  /* Mapa item_id → nombre desde el catálogo (para el historial de mermas). */
+  async function skuNameMap(ids) {
+    const map = {};
+    try {
+      (await fetchAllSkus({ status: 'active', limit: 400 })).forEach((s) => {
+        map[String(s.id)] = s.name || s.nombre || '';
+      });
+    } catch (e) { logError('merma/names', e); }
+    return map;
+  }
+  /* KPIs por causa (motivo). El motivo puede venir como "Motivo — observación";
+     se agrupa por la parte anterior al guion. */
+  function renderMermaKpis(rows) {
+    const wrap = el('mh-kpis'); if (!wrap) return;
+    const norm = (m) => String(m.reason || m.motivo || 'Otro').split('—')[0].split(' - ')[0].trim() || 'Otro';
+    const agg = {};
+    rows.forEach((m) => {
+      const k = norm(m);
+      const q = Math.abs(Number(m.quantity ?? m.cantidad ?? 0));
+      if (!agg[k]) agg[k] = { n: 0, q: 0 };
+      agg[k].n += 1; agg[k].q += q;
+    });
+    const entries = Object.entries(agg).sort((a, b) => b[1].q - a[1].q);
+    wrap.innerHTML = '';
+    entries.forEach(([causa, v]) => {
+      const card = document.createElement('div'); card.className = 'mh-kpi';
+      card.innerHTML = `<div class="mh-kpi-q">${Math.round(v.q * 100) / 100}</div>
+        <div class="mh-kpi-c">${causa}</div>
+        <div class="mh-kpi-n">${v.n} registro${v.n > 1 ? 's' : ''}</div>`;
+      wrap.appendChild(card);
+    });
   }
   function mermaHistCard(m) {
     const qty = Math.abs(Number(m.quantity ?? m.cantidad ?? 0));
     const fecha = m.created_at || m.movement_date || m.fecha || '';
     const foto = m.file_name || m.evidence || m.multimedia || m.file;
     const c = document.createElement('div'); c.className = 'rowcard col';
-    c.innerHTML = `<div class="rowcard-top"><b>${m.item_name || m.sku_name || ('SKU ' + (m.item_id ?? ''))}</b>
+    const nombre = m._name || m.item_name || m.sku_name || ('SKU ' + (m.item_id ?? ''));
+    const codigo = m.sku_final_code || m.item_code || '';
+    c.innerHTML = `<div class="rowcard-top"><b>${nombre}</b>
       <span class="mh-qty">−${qty} ${m.unit || 'ud'}</span></div>
-      <small class="tp-sub">${m.reason || m.motivo || '—'}${fecha ? ' · ' + fmtDT(fecha) : ''}</small>`;
+      <small class="tp-sub">${[codigo, m.reason || m.motivo || '—'].filter(Boolean).join(' · ')}${fecha ? ' · ' + fmtDT(fecha) : ''}</small>`;
     const det = document.createElement('div'); det.className = 'dash-det hidden';
     det.innerHTML = `
       ${m.batch_reference ? `<div class="dash-det-row"><span>Lote</span><b>${m.batch_reference}</b></div>` : ''}
