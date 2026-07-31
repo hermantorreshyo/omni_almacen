@@ -1837,10 +1837,13 @@ const App = (() => {
       if (!rows.length) { list.innerHTML = empty('Sin mermas en el rango seleccionado.'); return; }
       // Nombre legible del SKU: si el kardex no lo trae, cruzar con el catálogo.
       // El kardex puede traer el id del SKU en distintos campos, o el nombre directo.
-      const skuIdOf = (m) => m.item_id ?? m.sku_id ?? m.product_id ?? m.products_sku_id ?? m.item_ref ?? null;
-      const nameInRow = (m) => m.item_name || m.sku_name || m.product_name || m.name || m.nombre || null;
-      const nameMap = await skuNameMap(rows.map(skuIdOf));
-      rows = rows.map((m) => ({ ...m, _name: nameInRow(m) || nameMap[String(skuIdOf(m))] || null, _skuid: skuIdOf(m) }));
+      // El kardex ya viene enriquecido por el core (item_name, sku_final_code,
+      // category_name, unit_of_measure). Se lee directo, sin cruzar con el catálogo.
+      rows = rows.map((m) => ({
+        ...m,
+        _name: m.item_name || m.sku_name || null,
+        _skuid: m.item_id ?? null,
+      }));
 
       const total = rows.reduce((s, m) => s + Math.abs(Number(m.quantity ?? m.cantidad ?? 0)), 0);
       const tot = el('mh-total');
@@ -1852,36 +1855,6 @@ const App = (() => {
     } catch (e) { logError('merma/hist', e); list.innerHTML = apiErrorBox([e]); }
   }
   /* Mapa item_id → nombre desde el catálogo (para el historial de mermas). */
-  /* Mapa item_id → nombre para el historial de mermas.
-     SIN requestable_for (no queremos ocultar nada: es lectura, no una solicitud) y
-     abarcando todas las categorías, incluido PT. Resuelve el nombre de TODOS los ítems. */
-  async function skuNameMap(ids) {
-    const map = {};
-    const put = (rows) => rowsOf(rows).forEach((s) => { if (s.id != null) map[String(s.id)] = s.name || s.nombre || ''; });
-    try {
-      const base = { status: 'active', limit: 1000 };
-      // Cubrir TODOS los tipos: la consulta general excluye PT y PV para [1003],
-      // así que se piden explícitamente. (PV = producto de punto de venta, p. ej. roscón.)
-      const [gen, pt, pv, mp, cd, pn] = await Promise.all([
-        ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
-        ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
-        ApiClient.catalog('skus', { ...base, item_type: 'PV' }).catch(() => ({ data: [] })),
-        ApiClient.catalog('skus', { ...base, item_type: 'MP' }).catch(() => ({ data: [] })),
-        ApiClient.catalog('skus', { ...base, item_type: 'CD' }).catch(() => ({ data: [] })),
-        ApiClient.catalog('skus', { ...base, item_type: 'PN' }).catch(() => ({ data: [] })),
-      ]);
-      [gen, pt, pv, mp, cd, pn].forEach((r) => put(r.data));
-      // Reintento por id para los que aún falten (p. ej. SKU dado de baja o tipo raro).
-      const faltan = [...new Set((ids || []).map(String))].filter((id) => id && id !== 'null' && !map[id]);
-      if (faltan.length) {
-        const extra = await Promise.all(faltan.slice(0, 60).map((id) =>
-          ApiClient.catalog('skus', { q: id, limit: 5 }).then((r) => r.data).catch(() => [])));
-        // El q por id puede traer varios; quedarnos solo con el que coincide exactamente.
-        extra.forEach((rows) => rowsOf(rows).forEach((s) => { if (s.id != null) map[String(s.id)] = s.name || s.nombre || map[String(s.id)] || ''; }));
-      }
-    } catch (e) { logError('merma/names', e); }
-    return map;
-  }
   /* KPIs por causa (motivo). El motivo puede venir como "Motivo — observación";
      se agrupa por la parte anterior al guion. */
   function renderMermaKpis(rows) {
@@ -1912,7 +1885,7 @@ const App = (() => {
     const codigo = m.sku_final_code || m.item_code || '';
     const nombre = m._name || m.item_name || m.sku_name || codigo || 'Producto sin nombre';
     c.innerHTML = `<div class="rowcard-top"><b>${nombre}</b>
-      <span class="mh-qty">−${fmtQty(qty)} ${m.unit || 'ud'}</span></div>
+      <span class="mh-qty">−${fmtQty(qty)} ${m.unit_of_measure || m.unit || 'ud'}</span></div>
       <small class="tp-sub">${[codigo, m.reason || m.motivo || '—'].filter(Boolean).join(' · ')}${fecha ? ' · ' + fmtDT(fecha) : ''}</small>`;
     const det = document.createElement('div'); det.className = 'dash-det hidden';
     det.innerHTML = `
