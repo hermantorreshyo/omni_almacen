@@ -1841,19 +1841,6 @@ const App = (() => {
       const nameInRow = (m) => m.item_name || m.sku_name || m.product_name || m.name || m.nombre || null;
       const nameMap = await skuNameMap(rows.map(skuIdOf));
       rows = rows.map((m) => ({ ...m, _name: nameInRow(m) || nameMap[String(skuIdOf(m))] || null, _skuid: skuIdOf(m) }));
-      const sinNombre = rows.filter((m) => !m._name);
-      if (sinNombre.length) {
-        const ej = sinNombre[0];
-        console.warn('[merma-hist] sin nombre:', sinNombre.length, 'registros');
-        console.warn('[merma-hist] JSON completo del ejemplo:', JSON.stringify(ej));
-        console.warn('[merma-hist] item_id del ejemplo:', ej.item_id, '| nameMap tiene', Object.keys(nameMap).length, 'entradas');
-        console.warn('[merma-hist] ¿nameMap contiene ese id?:', nameMap[String(ej.item_id)] ?? 'NO');
-        // Prueba directa: consultar el catálogo por ese id concreto.
-        try {
-          const test = await ApiClient.catalog('skus', { q: String(ej.item_id), limit: 5 });
-          console.warn('[merma-hist] catalog q=item_id →', JSON.stringify(rowsOf(test.data).slice(0, 3)));
-        } catch (e) { console.warn('[merma-hist] catalog test falló', e); }
-      }
 
       const total = rows.reduce((s, m) => s + Math.abs(Number(m.quantity ?? m.cantidad ?? 0)), 0);
       const tot = el('mh-total');
@@ -1873,18 +1860,24 @@ const App = (() => {
     const put = (rows) => rowsOf(rows).forEach((s) => { if (s.id != null) map[String(s.id)] = s.name || s.nombre || ''; });
     try {
       const base = { status: 'active', limit: 1000 };
-      const [gen, pt] = await Promise.all([
+      // Cubrir TODOS los tipos: la consulta general excluye PT y PV para [1003],
+      // así que se piden explícitamente. (PV = producto de punto de venta, p. ej. roscón.)
+      const [gen, pt, pv, mp, cd, pn] = await Promise.all([
         ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
         ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
+        ApiClient.catalog('skus', { ...base, item_type: 'PV' }).catch(() => ({ data: [] })),
+        ApiClient.catalog('skus', { ...base, item_type: 'MP' }).catch(() => ({ data: [] })),
+        ApiClient.catalog('skus', { ...base, item_type: 'CD' }).catch(() => ({ data: [] })),
+        ApiClient.catalog('skus', { ...base, item_type: 'PN' }).catch(() => ({ data: [] })),
       ]);
-      put(gen.data); put(pt.data);
-      // Reintento por si algún ítem del historial no salió en la consulta general
-      // (p. ej. SKU inactivo dado de baja): buscar por nombre/código con q.
-      const faltan = [...new Set((ids || []).map(String))].filter((id) => !map[id]);
-      if (faltan.length && faltan.length <= 25) {
-        const extra = await Promise.all(faltan.map((id) =>
+      [gen, pt, pv, mp, cd, pn].forEach((r) => put(r.data));
+      // Reintento por id para los que aún falten (p. ej. SKU dado de baja o tipo raro).
+      const faltan = [...new Set((ids || []).map(String))].filter((id) => id && id !== 'null' && !map[id]);
+      if (faltan.length) {
+        const extra = await Promise.all(faltan.slice(0, 60).map((id) =>
           ApiClient.catalog('skus', { q: id, limit: 5 }).then((r) => r.data).catch(() => [])));
-        extra.forEach(put);
+        // El q por id puede traer varios; quedarnos solo con el que coincide exactamente.
+        extra.forEach((rows) => rowsOf(rows).forEach((s) => { if (s.id != null) map[String(s.id)] = s.name || s.nombre || map[String(s.id)] || ''; }));
       }
     } catch (e) { logError('merma/names', e); }
     return map;
