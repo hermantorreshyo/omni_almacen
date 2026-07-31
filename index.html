@@ -205,6 +205,26 @@
     .td-item-qty { flex: none; font-size: 1.05rem; font-weight: 800; color: #642a72; display: flex; align-items: baseline; gap: 4px; }
     .td-item-qty span { font-size: .7rem; font-weight: 600; color: #9ca3af; }
     .td-empty { padding: 10px 0; color: #9ca3af; font-size: .88rem; }
+    /* ── Mi Ruta de Hoy ── */
+    .trip-card { background: #fff; border: 1px solid #ece8f0; border-radius: 16px; padding: 14px; margin-bottom: 16px; box-shadow: 0 4px 14px rgba(100,42,114,.06); }
+    .trip-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .trip-name { font-size: 1.05rem; font-weight: 800; color: #1f2430; }
+    .trip-meta { font-size: .76rem; color: #9ca3af; margin-top: 2px; }
+    .trip-stops { display: flex; flex-direction: column; gap: 10px; }
+    .stop-card { border: 1px solid #efeaf1; border-left: 4px solid #F59E0B; border-radius: 12px; padding: 12px; background: #fffdf9; }
+    .stop-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .stop-seq { flex: none; width: 26px; height: 26px; border-radius: 50%; background: #F59E0B; color: #fff; font-weight: 800; font-size: .85rem; display: flex; align-items: center; justify-content: center; }
+    .stop-name { font-size: 1rem; font-weight: 800; color: #1f2430; }
+    .stop-meta { font-size: .74rem; color: #9ca3af; }
+    .stop-items { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+    .stop-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed #efe8ee; }
+    .stop-item:last-child { border-bottom: 0; }
+    .stop-item-meta { font-size: .68rem; font-weight: 700; color: #9ca3af; }
+    .stop-item-name { font-size: .9rem; font-weight: 700; color: #1f2430; }
+    .stop-item-qty { flex: none; font-size: 1rem; font-weight: 800; color: #642a72; display: flex; align-items: baseline; gap: 3px; }
+    .stop-item-qty span { font-size: .68rem; font-weight: 600; color: #9ca3af; }
+    .stop-deliver { width: 100%; margin-top: 4px; }
+    .stop-done { text-align: center; color: #0a7d54; font-weight: 700; font-size: .88rem; padding: 6px 0; }
     .td-head { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .td-route { color: #642a72; font-weight: 600; }
     .ali-sub { color: #642a72; font-weight: 600; font-size: .9rem; margin: -6px 0 12px; }
@@ -610,9 +630,9 @@
     <!-- ── FLUJO 3E: RECIBIR/CERRAR ─────────────────────────────── -->
     <section id="view-entregas" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Mis entregas</h1>
-      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Pedidos de tus rutas. Marca cada uno como entregado al dejarlo en la tienda.</p>
-      <div id="entregas-list"></div>
+      <h1 class="sec-title">Mi ruta de hoy</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Tus viajes de hoy, con las tiendas en orden de visita y lo que llevas a cada una.</p>
+      <div id="ruta-hoy"></div>
     </section>
     <section id="view-recibir" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
@@ -753,10 +773,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260712k"></script>
-  <script src="js/metrology.js?v=20260712k"></script>
-  <script src="js/scanner.js?v=20260712k"></script>
-  <script src="js/outbox-service.js?v=20260712k"></script>
-  <script src="js/app.js?v=20260712k"></script>
+  <script src="js/api-client.js?v=20260712l"></script>
+  <script src="js/metrology.js?v=20260712l"></script>
+  <script src="js/scanner.js?v=20260712l"></script>
+  <script src="js/outbox-service.js?v=20260712l"></script>
+  <script src="js/app.js?v=20260712l"></script>
 </body>
 </html>

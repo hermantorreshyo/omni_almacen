@@ -262,7 +262,7 @@ const App = (() => {
     ubicar:     { t: 'Ubicación por QR',         d: 'Asignar producto a estantería',  area: 'almacen',    go: openUbicar },
     picking:    { t: 'Picking de Traspasos',     d: 'Alistar y despachar pedidos',    area: 'almacen',    go: openPicking },
     transporte: { t: 'Ruta de Transporte',       d: 'Despacho y entrega en destino',  area: 'transporte', go: openTransporte },
-    entregas:   { t: 'Mis Entregas',             d: 'Pedidos de tu ruta · marcar entregado', area: 'transporte', go: openEntregas },
+    entregas:   { t: 'Mi Ruta de Hoy',           d: 'Tiendas y productos de tus viajes', area: 'transporte', go: openEntregas },
     solicitar:  { t: 'Solicitar Insumos',        d: 'Pedido de traspaso a bodega',    area: 'tienda',     go: openSolicitar },
     recibir:    { t: 'Recepción de Traspaso',    d: 'Verificar y cerrar entrega',     area: 'tienda',     go: openRecibir },
     merma:      { t: 'Registrar Merma',          d: 'Baja con evidencia fotográfica', area: 'mermas',     go: openMerma },
@@ -1529,14 +1529,91 @@ const App = (() => {
   }
 
   // F) Repartidor: entregas en tránsito de su sede → marcar entregado.
-  async function openEntregas() {
+  async function openEntregas() { return openRutaHoy(); }
+  async function openRutaHoy() {
     view('view-entregas');
+    const wrap = el('ruta-hoy'); wrap.innerHTML = skeleton();
+    try {
+      const r = await ApiClient.miRutaHoy();
+      const trips = (r.data && (r.data.trips || r.data)) || [];
+      if (!Array.isArray(trips) || !trips.length) {
+        wrap.innerHTML = empty('No tienes ningún viaje asignado hoy.');
+        return;
+      }
+      wrap.innerHTML = '';
+      trips.forEach((trip) => wrap.appendChild(tripCard(trip)));
+    } catch (e) {
+      logError('ruta-hoy', e);
+      // Degradación: si el endpoint no está disponible, caer al listado por sede.
+      if (e && (e.code === 'ERR_NOT_FOUND' || e.status === 404)) return openRutaHoyLegacy();
+      wrap.innerHTML = apiErrorBox([e]);
+    }
+  }
+  /* Tarjeta de un viaje: cabecera (ruta/vehículo/estado) + paradas en orden. */
+  function tripCard(trip) {
+    const card = document.createElement('div'); card.className = 'trip-card';
+    const stops = (trip.stops || []).slice().sort((a, b) => Number(a.stop_sequence ?? 0) - Number(b.stop_sequence ?? 0));
+    const veh = [trip.plate_number, trip.vehicle_model].filter(Boolean).join(' · ');
+    card.innerHTML = `
+      <div class="trip-head">
+        <div>
+          <div class="trip-name">${trip.delivery_route_name || trip.route_code || 'Viaje'}</div>
+          <div class="trip-meta">${[trip.route_code, veh].filter(Boolean).join(' · ')}</div>
+        </div>
+        <span class="chip">${String(trip.status || '').replace(/_/g, ' ')}</span>
+      </div>
+      <div class="trip-stops"></div>`;
+    const cont = card.querySelector('.trip-stops');
+    if (!stops.length) { cont.innerHTML = empty('Este viaje no tiene paradas.'); return card; }
+    stops.forEach((s, i) => cont.appendChild(stopCard(s, i + 1)));
+    return card;
+  }
+  /* Tarjeta de una parada (tienda) con sus productos y el botón de entregar. */
+  function stopCard(s, orden) {
+    const id = s.transfer_id ?? s.id;
+    const items = s.items || [];
+    const card = document.createElement('div'); card.className = 'stop-card';
+    const entregado = String(s.state || '').toUpperCase() === 'PENDIENTE_RECEPCION' || String(s.state || '').toUpperCase() === 'CERRADO';
+    card.innerHTML = `
+      <div class="stop-head">
+        <span class="stop-seq">${s.stop_sequence ?? orden}</span>
+        <div class="stop-main">
+          <div class="stop-name">${s.dest_name || s.dest_sede || ('Tienda ' + (s.dest_interlocutor_id ?? ''))}</div>
+          <div class="stop-meta">Traspaso #${id} · ${String(s.state || '').replace(/_/g, ' ')}</div>
+        </div>
+      </div>
+      <div class="stop-items">
+        ${items.length ? items.map((it) => `
+          <div class="stop-item">
+            <div class="stop-item-main">
+              <div class="stop-item-meta">${[it.sku_final_code, it.category_name].filter(Boolean).join(' · ')}</div>
+              <div class="stop-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
+            </div>
+            <div class="stop-item-qty">${fmtQty(it.quantity_dispatched ?? it.quantity_requested ?? 0)}<span>${it.unit_of_measure || it.unit || 'ud'}</span></div>
+          </div>`).join('') : '<div class="td-empty">Sin productos.</div>'}
+      </div>
+      ${entregado
+        ? '<div class="stop-done">✓ Entregado</div>'
+        : `<button class="btn-ok stop-deliver" data-id="${id}">Marcar entregado</button>`}`;
+    const btn = card.querySelector('.stop-deliver');
+    if (btn) btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await ApiClient.transporteEntregar({ traspaso_id: id });
+        toast('Entregado. La tienda ya puede recibirlo.', 'ok');
+        openRutaHoy();
+      } catch (e) { logError('ruta-hoy/deliver', e); toast(e.message || 'No se pudo marcar la entrega.', 'err'); btn.disabled = false; }
+    });
+    return card;
+  }
+  /* Fallback al listado por sede si /routes/today no está disponible. */
+  async function openRutaHoyLegacy() {
     await ensureCatalogs(['interlocutors', 'locations']);
-    const list = el('entregas-list'); list.innerHTML = skeleton();
+    const wrap = el('ruta-hoy'); wrap.innerHTML = skeleton();
     const { rows, errs, allFailed } = await fetchTransfers(['EN_RUTA', 'LISTO_DESPACHO']);
-    if (allFailed) { logError('entregas/list', errs[0]); list.innerHTML = apiErrorBox(errs); return; }
-    list.innerHTML = rows.length ? '' : empty('No tienes entregas pendientes.');
-    rows.forEach((t) => list.appendChild(entregaCard(t)));
+    if (allFailed) { logError('ruta-hoy/legacy', errs[0]); wrap.innerHTML = apiErrorBox(errs); return; }
+    wrap.innerHTML = rows.length ? '' : empty('No tienes entregas pendientes.');
+    rows.forEach((t) => wrap.appendChild(entregaCard(t)));
   }
   function entregaCard(t) {
     const id = tId(t);

@@ -125,6 +125,7 @@ const ApiClient = (() => {
     pickingItems:       (payload) => _request('picking_items',       { method: 'POST', body: payload }),
     pickingAlistar:     (payload) => _request('picking_alistar',     { method: 'POST', body: payload }),
     rutasActivas:       (status, extra = {}) => _request('rutas_activas', { query: { ...(status ? { status } : {}), ...extra } }),
+    miRutaHoy:          ()        => _request('mi_ruta_hoy'),
     rutaDetalle:        (id)      => _request('ruta_detalle', { query: { id } }),
     conductores:        ()        => _request('conductores'),
     vehiculos:          ()        => _request('vehiculos'),
