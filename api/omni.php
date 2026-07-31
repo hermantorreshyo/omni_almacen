@@ -245,13 +245,17 @@ switch ($action) {
         $user = $res['data']['user'] ?? $res['data'] ?? [];
         $_SESSION['omni_user'] = sanitizeUser($user);
         $_SESSION['omni_interlocutor'] = $id;
+        // Persistir el nombre de la sede: de la respuesta del core o, si no viene,
+        // del que el cliente envió al elegir la sede (paso 1). Sobrevive a un refresh.
+        $_SESSION['omni_interlocutor_name'] = $user['interlocutor_name']
+            ?? ($in['interlocutor_name'] ?? null);
         $_SESSION['omni_committed']    = true;
 
         out(['ok' => true, 'data' => [
             'user'            => sanitizeUser($user),
             'rol'             => $user['rol'] ?? $user['role'] ?? null,
             'interlocutor_id' => $id,
-            'interlocutor_name' => $user['interlocutor_name'] ?? null,
+            'interlocutor_name' => $_SESSION['omni_interlocutor_name'],
         ]]);
     }
 
@@ -261,7 +265,8 @@ switch ($action) {
             'user'            => $_SESSION['omni_user'],
             'rol'             => $_SESSION['omni_user']['rol'] ?? $_SESSION['omni_user']['role'] ?? null,
             'interlocutor_id' => $_SESSION['omni_interlocutor'] ?? null,
-            'interlocutor_name' => $_SESSION['omni_user']['interlocutor_name'] ?? null,
+            'interlocutor_name' => $_SESSION['omni_interlocutor_name']
+                ?? ($_SESSION['omni_user']['interlocutor_name'] ?? null),
             'interlocutor_set'=> true,
         ]]);
     }

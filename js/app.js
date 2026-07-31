@@ -170,12 +170,12 @@ const App = (() => {
     if (!state._creds) { toast('Vuelve a iniciar sesión.', 'warn'); view('view-login'); return; }
     setBusy('intc-confirm', true);
     try {
+      const nombreSede = sel.selectedOptions[0] ? sel.selectedOptions[0].text : null;
       // Re-login con la sede elegida → JWT con el rol de ESA sede (API CORE v6.8).
-      const r = await ApiClient.loginSede(state._creds.usuario, state._creds.password, id);
+      const r = await ApiClient.loginSede(state._creds.usuario, state._creds.password, id, nombreSede);
       setIdentity(r.data);
       state.interlocutor = id;
-      state.interlocutorName = (r.data && r.data.interlocutor_name)
-        || (sel.selectedOptions[0] ? sel.selectedOptions[0].text : null);
+      state.interlocutorName = (r.data && r.data.interlocutor_name) || nombreSede;
       state._creds = null;                            // ya no se necesitan
       await finishAuth();
     } catch (e) {
@@ -1829,8 +1829,17 @@ const App = (() => {
         .sort((a, b) => String(b.created_at || b.movement_date || '').localeCompare(String(a.created_at || a.movement_date || '')));
       if (!rows.length) { list.innerHTML = empty('Sin mermas en el rango seleccionado.'); return; }
       // Nombre legible del SKU: si el kardex no lo trae, cruzar con el catálogo.
-      const nameMap = await skuNameMap(rows.map((m) => m.item_id));
-      rows = rows.map((m) => ({ ...m, _name: m.item_name || m.sku_name || nameMap[String(m.item_id)] || null }));
+      // El kardex puede traer el id del SKU en distintos campos, o el nombre directo.
+      const skuIdOf = (m) => m.item_id ?? m.sku_id ?? m.product_id ?? m.products_sku_id ?? m.item_ref ?? null;
+      const nameInRow = (m) => m.item_name || m.sku_name || m.product_name || m.name || m.nombre || null;
+      const nameMap = await skuNameMap(rows.map(skuIdOf));
+      rows = rows.map((m) => ({ ...m, _name: nameInRow(m) || nameMap[String(skuIdOf(m))] || null, _skuid: skuIdOf(m) }));
+      const sinNombre = rows.filter((m) => !m._name);
+      if (sinNombre.length) {
+        // Diagnóstico: expone las claves reales del registro para ajustar el mapeo.
+        console.warn('[merma-hist] registros sin nombre resuelto:', sinNombre.length,
+          'ejemplo de campos:', Object.keys(sinNombre[0] || {}), sinNombre[0]);
+      }
 
       const total = rows.reduce((s, m) => s + Math.abs(Number(m.quantity ?? m.cantidad ?? 0)), 0);
       const tot = el('mh-total');

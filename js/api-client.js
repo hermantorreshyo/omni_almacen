@@ -95,8 +95,8 @@ const ApiClient = (() => {
 
     /* ── Catálogo ── */
     catalog: (resource, params = {}) => _request('catalog', { query: { resource, ...params } }),
-    loginSede: (usuario, password, interlocutor_id) =>
-      _request('login_sede', { method: 'POST', body: { usuario, password, interlocutor_id } }),
+    loginSede: (usuario, password, interlocutor_id, interlocutor_name) =>
+      _request('login_sede', { method: 'POST', body: { usuario, password, interlocutor_id, interlocutor_name } }),
     stock:   (params = {})           => _request('stock',   { query: params }),
     batches: (params = {})           => _request('batches', { query: params }),
     crearLote: (payload)             => _request('batch_crear', { method: 'POST', body: payload }),
