@@ -101,6 +101,13 @@ const App = (() => {
         setIdentity(s.data);
         state.interlocutor = s.data.interlocutor_id ?? null;
         state.interlocutorName = s.data.interlocutor_name ?? null;
+        if (!state.interlocutorName && state.interlocutor) {   // red de seguridad
+          try {
+            await ensureCatalog('interlocutors');
+            const me = (state.catalogs.interlocutors || []).find((x) => Number(x.id) === Number(state.interlocutor));
+            if (me) state.interlocutorName = intName(me);
+          } catch (_) {}
+        }
         await finishAuth(); return;
       }
     } catch (e) { logError('boot/session', e); }
@@ -1836,9 +1843,16 @@ const App = (() => {
       rows = rows.map((m) => ({ ...m, _name: nameInRow(m) || nameMap[String(skuIdOf(m))] || null, _skuid: skuIdOf(m) }));
       const sinNombre = rows.filter((m) => !m._name);
       if (sinNombre.length) {
-        // Diagnóstico: expone las claves reales del registro para ajustar el mapeo.
-        console.warn('[merma-hist] registros sin nombre resuelto:', sinNombre.length,
-          'ejemplo de campos:', Object.keys(sinNombre[0] || {}), sinNombre[0]);
+        const ej = sinNombre[0];
+        console.warn('[merma-hist] sin nombre:', sinNombre.length, 'registros');
+        console.warn('[merma-hist] JSON completo del ejemplo:', JSON.stringify(ej));
+        console.warn('[merma-hist] item_id del ejemplo:', ej.item_id, '| nameMap tiene', Object.keys(nameMap).length, 'entradas');
+        console.warn('[merma-hist] ¿nameMap contiene ese id?:', nameMap[String(ej.item_id)] ?? 'NO');
+        // Prueba directa: consultar el catálogo por ese id concreto.
+        try {
+          const test = await ApiClient.catalog('skus', { q: String(ej.item_id), limit: 5 });
+          console.warn('[merma-hist] catalog q=item_id →', JSON.stringify(rowsOf(test.data).slice(0, 3)));
+        } catch (e) { console.warn('[merma-hist] catalog test falló', e); }
       }
 
       const total = rows.reduce((s, m) => s + Math.abs(Number(m.quantity ?? m.cantidad ?? 0)), 0);

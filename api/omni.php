@@ -261,12 +261,28 @@ switch ($action) {
 
     case 'session': {
         if (empty($_SESSION['omni_user']) || empty($_SESSION['omni_committed'])) out(['ok' => false, 'data' => null]);
+        $intId = $_SESSION['omni_interlocutor'] ?? null;
+        $intName = $_SESSION['omni_interlocutor_name']
+            ?? ($_SESSION['omni_user']['interlocutor_name'] ?? null);
+        // Sesiones creadas antes de persistir el nombre (o si no vino): resolverlo del
+        // core por el id y cachearlo en sesión para no repetir la consulta.
+        if (empty($intName) && $intId) {
+            $r = client()->request('GET', $UP['catalog_interlocutors'] ?? '/catalog/interlocutors', null, true);
+            if (!empty($r['ok']) && is_array($r['data'] ?? null)) {
+                foreach ($r['data'] as $it) {
+                    if ((int)($it['id'] ?? 0) === (int)$intId) {
+                        $intName = $it['commercial_name'] ?? $it['fiscal_name'] ?? $it['name'] ?? null;
+                        break;
+                    }
+                }
+                if ($intName) $_SESSION['omni_interlocutor_name'] = $intName;
+            }
+        }
         out(['ok' => true, 'data' => [
             'user'            => $_SESSION['omni_user'],
             'rol'             => $_SESSION['omni_user']['rol'] ?? $_SESSION['omni_user']['role'] ?? null,
-            'interlocutor_id' => $_SESSION['omni_interlocutor'] ?? null,
-            'interlocutor_name' => $_SESSION['omni_interlocutor_name']
-                ?? ($_SESSION['omni_user']['interlocutor_name'] ?? null),
+            'interlocutor_id' => $intId,
+            'interlocutor_name' => $intName,
             'interlocutor_set'=> true,
         ]]);
     }
