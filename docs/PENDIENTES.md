@@ -4,9 +4,48 @@ _Registro vivo. Actualizar a medida que se resuelvan._
 
 ---
 
-## 🔴 INFRAESTRUCTURA — Certificado SSL con cadena poco compatible
+## 🟢 INFRAESTRUCTURA — Certificado SSL (RESUELTO 2026-07-31)
 
-**Estado:** pendiente (no bloqueante para dispositivos modernos)
+**Resolución:** Los 7 subdominios de las apps (api.omni, almacen, compras, produccion,
+watchdog, notificaciones, academy) fueron reemitidos con certbot en **RSA anclado a
+ISRG Root X1**. Cadena verificada: hoja → YR1/YR2 (RSA) → Root YR → **ISRG Root X1**.
+Esto elimina el `NET::ERR_CERT_AUTHORITY_INVALID` en dispositivos antiguos.
+Persistido en cada `renewal/*.conf`: `key_type = rsa` + `preferred_chain = ISRG Root X1`
+(no volverá a ECDSA en renovaciones automáticas).
+
+**Estado de cierre:**
+- ✅ Los 7 subdominios de las apps sirven RSA→ISRG Root X1 y tienen el flag persistido.
+- ✅ `certbot renew --dry-run` (2026-07-31): los 8 dominios simulan renovación con éxito.
+- ⏳ Validación en campo en proceso (usuario afectado confirma que ya no ve el error).
+
+**Traspasado a infraestructura (fuera del alcance de [1003]):** los siguientes puntos se
+documentaron en `docs/INFRAESTRUCTURA_SERVIDOR_HANDOFF.md` para un hilo dedicado a
+certificados/vhosts/servidor:
+1. **Apex `josepan.app`** sigue en `ecdsa` sin `preferred_chain`. Hoy no sirve nada de cara
+   al usuario; a mediano plazo será la intranet de accesos. Reemitir en RSA+X1 al desplegarla.
+2. **`watchdog.josepan.app`** (subsistema [1006] en despliegue): verificar que su vhost no
+   sirva el certificado de `academy` (apareció Subject `academy` en el diagnóstico).
+
+---
+
+## 🔴 (HISTÓRICO) INFRAESTRUCTURA — Certificado SSL con cadena poco compatible
+
+**Estado:** DIAGNÓSTICO CONFIRMADO (2026-07-31) — pendiente de reemitir certificados.
+
+**Confirmación (2026-07-31):**
+- Gestor: certbot (`/usr/bin/certbot`), 7 dominios en `/etc/letsencrypt/renewal/`, todos Key Type ECDSA.
+- Error real del usuario: `NET::ERR_CERT_AUTHORITY_INVALID` (raíz no confiable).
+- Issuers verificados: api/almacen/compras/produccion/watchdog/academy → `CN=YE1`; notificaciones → `CN=YE2`. Todos anclan en `ISRG Root X2` (ECDSA).
+- SSL Labs sobre almacen.josepan.app: "Trusted: Yes" en trust stores actualizados e incluye cross-sign X2←X1, SIN chain issues. ⇒ El fallo NO es cadena rota, sino dispositivos con almacén de confianza desactualizado que no traen ISRG Root X2 ni el cross-sign.
+
+**Decisión:** Opción A — reemitir en RSA anclado a ISRG Root X1 (máxima compatibilidad con equipos viejos), en los 7 dominios, y persistir en renovación automática.
+
+**Dominios a reemitir:** api.omni, almacen, compras, produccion, watchdog, notificaciones, academy (.josepan.app).
+
+**Siguiente acción concreta:** revisar `cat /etc/letsencrypt/renewal/api.omni.josepan.app.conf` (authenticator apache/webroot y si fija key_type) antes de lanzar `certbot certonly --force-renewal --key-type rsa --preferred-chain "ISRG Root X1" -d <dominio>` por cada uno; luego persistir `key_type = rsa` y `preferred_chain = ISRG Root X1` en cada .conf, recargar Apache, verificar issuer (debe ser R10/R11/R13) y `certbot renew --dry-run`.
+
+---
+_Estado previo:_ pendiente (no bloqueante para dispositivos modernos)
 **Síntoma:** algunos usuarios ven "conexión insegura" / aviso de certificado; en otros
 dispositivos no ocurre. Patrón "en unos sí, en otros no".
 

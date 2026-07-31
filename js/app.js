@@ -1842,12 +1842,27 @@ const App = (() => {
     } catch (e) { logError('merma/hist', e); list.innerHTML = apiErrorBox([e]); }
   }
   /* Mapa item_id → nombre desde el catálogo (para el historial de mermas). */
+  /* Mapa item_id → nombre para el historial de mermas.
+     SIN requestable_for (no queremos ocultar nada: es lectura, no una solicitud) y
+     abarcando todas las categorías, incluido PT. Resuelve el nombre de TODOS los ítems. */
   async function skuNameMap(ids) {
     const map = {};
+    const put = (rows) => rowsOf(rows).forEach((s) => { if (s.id != null) map[String(s.id)] = s.name || s.nombre || ''; });
     try {
-      (await fetchAllSkus({ status: 'active', limit: 400 })).forEach((s) => {
-        map[String(s.id)] = s.name || s.nombre || '';
-      });
+      const base = { status: 'active', limit: 1000 };
+      const [gen, pt] = await Promise.all([
+        ApiClient.catalog('skus', base).catch(() => ({ data: [] })),
+        ApiClient.catalog('skus', { ...base, item_type: 'PT' }).catch(() => ({ data: [] })),
+      ]);
+      put(gen.data); put(pt.data);
+      // Reintento por si algún ítem del historial no salió en la consulta general
+      // (p. ej. SKU inactivo dado de baja): buscar por nombre/código con q.
+      const faltan = [...new Set((ids || []).map(String))].filter((id) => !map[id]);
+      if (faltan.length && faltan.length <= 25) {
+        const extra = await Promise.all(faltan.map((id) =>
+          ApiClient.catalog('skus', { q: id, limit: 5 }).then((r) => r.data).catch(() => [])));
+        extra.forEach(put);
+      }
     } catch (e) { logError('merma/names', e); }
     return map;
   }
@@ -1878,8 +1893,8 @@ const App = (() => {
     const fecha = m.created_at || m.movement_date || m.fecha || '';
     const foto = m.file_name || m.evidence || m.multimedia || m.file;
     const c = document.createElement('div'); c.className = 'rowcard col';
-    const nombre = m._name || m.item_name || m.sku_name || ('SKU ' + (m.item_id ?? ''));
     const codigo = m.sku_final_code || m.item_code || '';
+    const nombre = m._name || m.item_name || m.sku_name || codigo || 'Producto sin nombre';
     c.innerHTML = `<div class="rowcard-top"><b>${nombre}</b>
       <span class="mh-qty">−${fmtQty(qty)} ${m.unit || 'ud'}</span></div>
       <small class="tp-sub">${[codigo, m.reason || m.motivo || '—'].filter(Boolean).join(' · ')}${fecha ? ' · ' + fmtDT(fecha) : ''}</small>`;
