@@ -56,7 +56,7 @@ $UP = [
     'catalog_categories'   => '/catalog/categories',
     'catalog_families'     => '/catalog/families',
     'routes'               => '/logistics/routes',
-    'routes_today'         => '/logistics/routes/today',              // GET viajes activos del conductor (JWT)
+    'routes_mine'          => '/logistics/routes/mine',              // GET rutas del conductor (JWT)
     'route_update'         => '/logistics/routes/%d',                 // PUT dispatch_time + status
     'route_detail'         => '/logistics/routes/%d',                 // GET route + transfers
     'drivers'              => '/logistics/drivers',                   // GET conductores (rol Repartidor)
@@ -468,9 +468,9 @@ switch ($action) {
         relay(client()->request('PATCH', sprintf($UP['transfer_picking_items'], $id),
             json_encode(['items' => $in['items'] ?? []], JSON_UNESCAPED_UNICODE), true));
     }
-    case 'mi_ruta_hoy': {          // GET /logistics/routes/today — el conductor sale del JWT
+    case 'mis_rutas': {            // GET /logistics/routes/mine — el conductor sale del JWT
         requireAuth();
-        relay(client()->request('GET', $UP['routes_today'], null, true));
+        relay(client()->request('GET', $UP['routes_mine'], null, true));
     }
     case 'rutas_activas': {
         requireAuth();

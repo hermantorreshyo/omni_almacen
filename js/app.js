@@ -262,7 +262,7 @@ const App = (() => {
     ubicar:     { t: 'Ubicación por QR',         d: 'Asignar producto a estantería',  area: 'almacen',    go: openUbicar },
     picking:    { t: 'Picking de Traspasos',     d: 'Alistar y despachar pedidos',    area: 'almacen',    go: openPicking },
     transporte: { t: 'Ruta de Transporte',       d: 'Despacho y entrega en destino',  area: 'transporte', go: openTransporte },
-    entregas:   { t: 'Mi Ruta de Hoy',           d: 'Tiendas y productos de tus viajes', area: 'transporte', go: openEntregas },
+    entregas:   { t: 'Mis Rutas',                 d: 'Tiendas y productos de tus rutas', area: 'transporte', go: openEntregas },
     solicitar:  { t: 'Solicitar Insumos',        d: 'Pedido de traspaso a bodega',    area: 'tienda',     go: openSolicitar },
     recibir:    { t: 'Recepción de Traspaso',    d: 'Verificar y cerrar entrega',     area: 'tienda',     go: openRecibir },
     merma:      { t: 'Registrar Merma',          d: 'Baja con evidencia fotográfica', area: 'mermas',     go: openMerma },
@@ -1534,37 +1534,37 @@ const App = (() => {
     view('view-entregas');
     const wrap = el('ruta-hoy'); wrap.innerHTML = skeleton();
     try {
-      const r = await ApiClient.miRutaHoy();
-      const trips = (r.data && (r.data.trips || r.data)) || [];
-      if (!Array.isArray(trips) || !trips.length) {
-        wrap.innerHTML = empty('No tienes ningún viaje asignado hoy.');
+      const r = await ApiClient.misRutas();
+      const routes = (r.data && (r.data.routes || r.data)) || [];
+      if (!Array.isArray(routes) || !routes.length) {
+        wrap.innerHTML = empty('No tienes ninguna ruta asignada.');
         return;
       }
       wrap.innerHTML = '';
-      trips.forEach((trip) => wrap.appendChild(tripCard(trip)));
+      routes.forEach((grp) => wrap.appendChild(routeCard(grp)));
     } catch (e) {
-      logError('ruta-hoy', e);
-      // Degradación: si el endpoint no está disponible, caer al listado por sede.
+      logError('mis-rutas', e);
       if (e && (e.code === 'ERR_NOT_FOUND' || e.status === 404)) return openRutaHoyLegacy();
       wrap.innerHTML = apiErrorBox([e]);
     }
   }
-  /* Tarjeta de un viaje: cabecera (ruta/vehículo/estado) + paradas en orden. */
-  function tripCard(trip) {
+  /* Tarjeta de una ruta (o del grupo de traspasos asignados a mano: delivery_route=null). */
+  function routeCard(grp) {
+    const ruta = grp.delivery_route || null;
     const card = document.createElement('div'); card.className = 'trip-card';
-    const stops = (trip.stops || []).slice().sort((a, b) => Number(a.stop_sequence ?? 0) - Number(b.stop_sequence ?? 0));
-    const veh = [trip.plate_number, trip.vehicle_model].filter(Boolean).join(' · ');
+    const stops = (grp.stops || []).slice().sort((a, b) => Number(a.stop_sequence ?? 0) - Number(b.stop_sequence ?? 0));
+    const titulo = ruta ? (ruta.name || ('Ruta ' + ruta.id)) : 'Entregas puntuales';
+    const sub = ruta ? (ruta.status ? String(ruta.status).replace(/_/g, ' ') : '') : 'Asignadas manualmente';
     card.innerHTML = `
       <div class="trip-head">
         <div>
-          <div class="trip-name">${trip.delivery_route_name || trip.route_code || 'Viaje'}</div>
-          <div class="trip-meta">${[trip.route_code, veh].filter(Boolean).join(' · ')}</div>
+          <div class="trip-name">${titulo}</div>
+          <div class="trip-meta">${sub}${stops.length ? ' · ' + stops.length + ' parada' + (stops.length > 1 ? 's' : '') : ''}</div>
         </div>
-        <span class="chip">${String(trip.status || '').replace(/_/g, ' ')}</span>
       </div>
       <div class="trip-stops"></div>`;
     const cont = card.querySelector('.trip-stops');
-    if (!stops.length) { cont.innerHTML = empty('Este viaje no tiene paradas.'); return card; }
+    if (!stops.length) { cont.innerHTML = empty('Esta ruta no tiene entregas pendientes.'); return card; }
     stops.forEach((s, i) => cont.appendChild(stopCard(s, i + 1)));
     return card;
   }
