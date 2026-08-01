@@ -57,6 +57,7 @@ $UP = [
     'catalog_families'     => '/catalog/families',
     'routes'               => '/logistics/routes',
     'routes_mine'          => '/logistics/routes/mine',              // GET rutas del conductor (JWT)
+    'transport_monitor'    => '/logistics/transport-monitor',        // GET tablero solo lectura (logistics.dispatch)
     'route_update'         => '/logistics/routes/%d',                 // PUT dispatch_time + status
     'route_detail'         => '/logistics/routes/%d',                 // GET route + transfers
     'drivers'              => '/logistics/drivers',                   // GET conductores (rol Repartidor)
@@ -468,6 +469,10 @@ switch ($action) {
         relay(client()->request('PATCH', sprintf($UP['transfer_picking_items'], $id),
             json_encode(['items' => $in['items'] ?? []], JSON_UNESCAPED_UNICODE), true));
     }
+    case 'transport_monitor': {    // GET /logistics/transport-monitor — tablero solo lectura
+        requireAuth();
+        relay(client()->request('GET', $UP['transport_monitor'], null, true));
+    }
     case 'mis_rutas': {            // GET /logistics/routes/mine — el conductor sale del JWT
         requireAuth();
         relay(client()->request('GET', $UP['routes_mine'], null, true));
@@ -511,6 +516,12 @@ switch ($action) {
         if ($id <= 0 || $ruta <= 0) fail('ERR_PARAM', 'traspaso_id y logistic_route_id son obligatorios.', 422);
         relay(client()->request('PUT', sprintf($UP['transfer_assign_route'], $id),
             json_encode(['logistic_route_id' => $ruta], JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'traspaso_salida': {      // PUT /transfers/{id}/route — "marcar como enviado" (v6.13)
+        requireAuth();
+        $id = (int) (bodyJson()['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        relay(client()->request('PUT', sprintf($UP['transfer_route'], $id), '{}', true));
     }
     case 'transporte_ruta': {
         requireAuth();

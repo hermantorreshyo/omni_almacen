@@ -1400,131 +1400,40 @@ const App = (() => {
   // D) Transportista: pedidos listos para transportar / en ruta (origen = mi sede).
   async function openTransporte() {
     view('view-transporte');
-    await ensureCatalogs(['locations', 'interlocutors']);
     const list = el('transporte-list'); list.innerHTML = skeleton();
-    // Rutas activas: aceptan traspasos en estado despachado y en_transito.
+    // Tablero de monitoreo de SOLO LECTURA (v6.13): pedidos LISTO_DESPACHO / EN_RUTA
+    // de todos los conductores. Sin acciones. Requiere logistics.dispatch (Chofer Logístico).
     try {
-      const mio = isChofer() ? { driver: 'me' } : {};      // el chofer solo ve sus rutas
-      const [rd, rt] = await Promise.all([
-        ApiClient.rutasActivas('despachado', mio).catch(() => ({ data: [] })),
-        ApiClient.rutasActivas('en_transito', mio).catch(() => ({ data: [] })),
-      ]);
-      const seenR = new Set();
-      state.rutas = [...rowsOf(rd.data), ...rowsOf(rt.data)]
-        .filter((r) => { if (seenR.has(r.id)) return false; seenR.add(r.id); return true; });
-    } catch (e) { logError('transporte/rutas', e); state.rutas = []; }
-    renderRutasPanel();
-    const { rows, errs, allFailed } = await fetchTransfers(['LISTO_DESPACHO', 'EN_RUTA']);
-    if (allFailed) { logError('transporte/list', errs[0]); list.innerHTML = apiErrorBox(errs); return; }
-    const mine = Number(state.interlocutor);
-    const mias = rows.filter((t) => { const o = originIntOf(t); return o == null || o === mine; });
-    list.innerHTML = mias.length ? '' : empty('No hay pedidos listos para transportar.');
-    mias.forEach((t) => list.appendChild(transporteCard(t)));
+      const r = await ApiClient.transportMonitor();
+      const rows = rowsOf(r.data);
+      if (!rows.length) { list.innerHTML = empty('No hay pedidos en ruta en este momento.'); return; }
+      // Ordenar: primero EN_RUTA, luego LISTO_DESPACHO; dentro, por ruta y destino.
+      const rank = (s) => (String(s).toUpperCase() === 'EN_RUTA' ? 0 : 1);
+      rows.sort((a, b) => rank(a.state) - rank(b.state)
+        || String(a.delivery_route_name || '').localeCompare(String(b.delivery_route_name || ''))
+        || String(a.dest_name || '').localeCompare(String(b.dest_name || '')));
+      list.innerHTML = '';
+      rows.forEach((m) => list.appendChild(monitorCard(m)));
+    } catch (e) {
+      logError('transporte/monitor', e);
+      if (e && e.code === 'ERR_FORBIDDEN') { list.innerHTML = empty('No tienes permiso para ver el monitoreo de transporte.'); return; }
+      list.innerHTML = apiErrorBox([e]);
+    }
   }
-  function isChofer() {
-    const r = (state.rol || '').toString().toLowerCase();
-    return /chofer|repartidor|conductor/.test(r);
-  }
-  function rutaLabel(r) {
-    const base = r.route_code || ('Ruta ' + r.id);
-    const extra = [r.plate_number, r.driver_name].filter(Boolean).join(' · ');
-    return extra ? `${base} — ${extra}` : base;
-  }
-  // Panel superior: rutas activas con acción de confirmar salida del vehículo.
-  function renderRutasPanel() {
-    const wrap = el('transporte-routes'); if (!wrap) return;
-    wrap.innerHTML = '';
-    const rutas = state.rutas || [];
-    if (!rutas.length) return;
-    const h = document.createElement('div'); h.className = 'tp-panel-h'; h.textContent = 'Rutas activas';
-    wrap.appendChild(h);
-    rutas.forEach((r) => {
-      const st = String(r.status || '').toLowerCase();
-      const card = document.createElement('div'); card.className = 'rowcard col';
-      card.innerHTML = `<div class="rowcard-top"><b>${r.route_code || ('Ruta ' + r.id)}</b>
-        <span class="chip ${st === 'en_transito' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ') || '—'}</span></div>
-        <small class="tp-sub">${[r.plate_number, r.model, r.driver_name].filter(Boolean).join(' · ')}${r.transfers_count != null ? ' · ' + r.transfers_count + ' traspaso(s)' : ''}</small>`;
-      if (st === 'despachado') {
-        const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
-        const go = document.createElement('button'); go.className = 'btn-prim-sm'; go.textContent = 'Confirmar salida';
-        go.addEventListener('click', async () => {
-          try {
-            await ApiClient.rutaActualizar({ route_id: r.id, dispatch_time: new Date().toISOString(), status: 'en_transito' });
-            toast('Salida confirmada. Ruta en tránsito.', 'ok'); openTransporte();
-          } catch (e) { logError('ruta/salida', e); toast(e.message || 'No se pudo confirmar la salida.', 'err'); }
-        });
-        ctrls.appendChild(go); card.appendChild(ctrls);
-      }
-      wrap.appendChild(card);
-    });
-  }
-  function transporteCard(t) {
-    const id = tId(t); const st = tState(t);
-    const c = document.createElement('div'); c.className = 'rowcard col';
-    c.innerHTML = `<div class="rowcard-top"><b>Traspaso #${id}</b>
+  /* Fila del tablero de monitoreo (solo lectura, sin botones de acción). */
+  function monitorCard(m) {
+    const st = String(m.state || '').toUpperCase();
+    const c = document.createElement('div'); c.className = 'rowcard col mon-card';
+    const driver = m.driver_name || m.driver_username || 'Sin conductor';
+    const ruta = m.delivery_route_name || (m.is_manual_override ? 'Asignación manual' : '—');
+    const tEnv = m.at_listo_despacho ? fmtDT(m.at_listo_despacho) : null;
+    const tRuta = m.at_en_ruta ? fmtDT(m.at_en_ruta) : null;
+    c.innerHTML = `<div class="rowcard-top"><b>${m.dest_name || ('Tienda ' + (m.dest_interlocutor_id ?? ''))}</b>
       <span class="chip ${st === 'EN_RUTA' ? 'chip-amb' : ''}">${st.replace(/_/g, ' ')}</span></div>
-      <small class="tp-sub">Entregar a: ${t.dest_sede || intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}${t.route_code ? ' · ' + t.route_code : ''}</small>`;
-    const det = document.createElement('div'); det.className = 'dash-det hidden';
-    const seeBtn = document.createElement('button'); seeBtn.className = 'btn-ghost btn-see'; seeBtn.textContent = 'Ver qué entrego';
-    seeBtn.addEventListener('click', async () => {
-      det.classList.toggle('hidden');
-      if (!det.dataset.loaded) {
-        det.innerHTML = '<div class="skel"></div>';
-        const items = await transferItems(t); det.dataset.loaded = '1';
-        det.innerHTML = items.length ? items.map((it) =>
-          `<div class="dash-det-row"><span>${itemLabel(it)}</span><b>${fmtQty(it.quantity_dispatched ?? it.quantity_requested ?? 0)}</b></div>`).join('')
-          : '<div class="dash-det-row"><span>Sin ítems.</span></div>';
-      }
-    });
-    const ctrls = document.createElement('div'); ctrls.className = 'rowcard-ctrls';
-    const assignedWrap = document.createElement('div'); assignedWrap.className = 'tp-assigned';
-    const showAssigned = (info) => {
-      const label = [info.route_code, info.plate_number, info.driver_name].filter(Boolean).join(' · ');
-      assignedWrap.innerHTML = label ? `<span class="tp-ok">✓ Asignado a ${label}</span>` : '';
-    };
-    if (t.logistic_route_id || t.route_code) showAssigned(t);   // ya asignado (si el API lo trae)
-    if (st === 'LISTO_DESPACHO' || st === 'EN_RUTA') {
-      if (!state.rutas || !state.rutas.length) {
-        const msg = document.createElement('div'); msg.className = 'tp-noroute';
-        msg.textContent = 'No hay rutas disponibles. Contacta al administrador.';
-        ctrls.appendChild(msg);
-      } else {
-        const ruta = document.createElement('select'); ruta.className = 'sel';
-        ruta.add(new Option('Asignar a ruta…', ''));
-        state.rutas.forEach((r) => ruta.add(new Option(rutaLabel(r), r.id)));
-        if (t.logistic_route_id) ruta.value = String(t.logistic_route_id);
-        const go = document.createElement('button'); go.className = 'btn-amber-sm'; go.textContent = 'Asignar ruta';
-        go.addEventListener('click', async () => {
-          if (!ruta.value) { toast('Elige una ruta.', 'warn'); return; }
-          setBusyEl(go, true);
-          try {
-            const r = await ApiClient.asignarRuta({ traspaso_id: id, logistic_route_id: Number(ruta.value) });
-            const info = (r && r.data) ? r.data : (state.rutas.find((x) => Number(x.id) === Number(ruta.value)) || {});
-            showAssigned(info);
-            toast('Traspaso asignado a la ruta.', 'ok');
-          } catch (e) { logError('transporte/asignar', e); toast(e.message || 'No se pudo asignar.', 'err'); }
-          finally { setBusyEl(go, false); }
-        });
-        ctrls.append(ruta, go);
-      }
-    }
-    if (st === 'LISTO_DESPACHO') {                // despacho directo sin ruta/chofer
-      const goSend = document.createElement('button'); goSend.className = 'btn-ok-sm'; goSend.textContent = 'ENVIAR';
-      goSend.addEventListener('click', async () => {
-        await sendTx('traspaso_enviar', { traspaso_id: id }, 'Despachado directo (PENDIENTE_RECEPCION).');
-        openTransporte();
-      });
-      ctrls.append(goSend);
-    }
-    if (st === 'EN_RUTA') {                       // marcar entrega física → PENDIENTE_RECEPCION
-      const goEnt = document.createElement('button'); goEnt.className = 'btn-prim-sm'; goEnt.textContent = 'ENTREGAR';
-      goEnt.addEventListener('click', async () => {
-        await sendTx('transporte_entregar', { traspaso_id: id }, 'Entregado (PENDIENTE_RECEPCION).');
-        openTransporte();
-      });
-      ctrls.append(goEnt);
-    }
-    c.append(seeBtn, det, ctrls, assignedWrap);
+      <small class="tp-sub">Traspaso #${m.transfer_id} · ${ruta}${m.is_manual_override ? ' · manual' : ''}</small>
+      <div class="mon-row"><span class="mon-k">Conductor</span><span class="mon-v">${driver}</span></div>
+      ${tEnv ? `<div class="mon-row"><span class="mon-k">Enviado</span><span class="mon-v">${tEnv}</span></div>` : ''}
+      ${tRuta ? `<div class="mon-row"><span class="mon-k">En ruta</span><span class="mon-v">${tRuta}</span></div>` : ''}`;
     return c;
   }
 
@@ -1572,14 +1481,20 @@ const App = (() => {
   function stopCard(s, orden) {
     const id = s.transfer_id ?? s.id;
     const items = s.items || [];
+    const estado = String(s.state || '').toUpperCase();
     const card = document.createElement('div'); card.className = 'stop-card';
-    const entregado = String(s.state || '').toUpperCase() === 'PENDIENTE_RECEPCION' || String(s.state || '').toUpperCase() === 'CERRADO';
+    // Acción según el estado del pedido (v6.13): dos acciones separadas.
+    let accionHtml = '';
+    if (estado === 'LISTO_DESPACHO') accionHtml = `<button class="btn-ok stop-act" data-act="salida" data-id="${id}">Marcar como enviado</button>`;
+    else if (estado === 'EN_RUTA')   accionHtml = `<button class="btn-ok stop-act" data-act="entregar" data-id="${id}">Marcar como entregado</button>`;
+    else if (estado === 'PENDIENTE_RECEPCION') accionHtml = '<div class="stop-done">✓ Entregado · pendiente de recepción</div>';
+    else if (estado === 'CERRADO')   accionHtml = '<div class="stop-done">✓ Recibido en tienda</div>';
     card.innerHTML = `
       <div class="stop-head">
         <span class="stop-seq">${s.stop_sequence ?? orden}</span>
         <div class="stop-main">
           <div class="stop-name">${s.dest_name || s.dest_sede || ('Tienda ' + (s.dest_interlocutor_id ?? ''))}</div>
-          <div class="stop-meta">Traspaso #${id} · ${String(s.state || '').replace(/_/g, ' ')}</div>
+          <div class="stop-meta">Traspaso #${id} · ${estado.replace(/_/g, ' ')}</div>
         </div>
       </div>
       <div class="stop-items">
@@ -1592,17 +1507,21 @@ const App = (() => {
             <div class="stop-item-qty">${fmtQty(it.quantity_dispatched ?? it.quantity_requested ?? 0)}<span>${it.unit_of_measure || it.unit || 'ud'}</span></div>
           </div>`).join('') : '<div class="td-empty">Sin productos.</div>'}
       </div>
-      ${entregado
-        ? '<div class="stop-done">✓ Entregado</div>'
-        : `<button class="btn-ok stop-deliver" data-id="${id}">Marcar entregado</button>`}`;
-    const btn = card.querySelector('.stop-deliver');
+      ${accionHtml}`;
+    const btn = card.querySelector('.stop-act');
     if (btn) btn.addEventListener('click', async () => {
       btn.disabled = true;
+      const act = btn.dataset.act;
       try {
-        await ApiClient.transporteEntregar({ traspaso_id: id });
-        toast('Entregado. La tienda ya puede recibirlo.', 'ok');
+        if (act === 'salida') {
+          await ApiClient.traspasoSalida({ traspaso_id: id });
+          toast('Pedido marcado como enviado (en ruta).', 'ok');
+        } else {
+          await ApiClient.transporteEntregar({ traspaso_id: id });
+          toast('Entregado. La tienda ya puede recibirlo.', 'ok');
+        }
         openRutaHoy();
-      } catch (e) { logError('ruta-hoy/deliver', e); toast(e.message || 'No se pudo marcar la entrega.', 'err'); btn.disabled = false; }
+      } catch (e) { logError('mis-rutas/accion', e); toast(e.message || 'No se pudo completar la acción.', 'err'); btn.disabled = false; }
     });
     return card;
   }
