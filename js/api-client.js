@@ -128,6 +128,8 @@ const ApiClient = (() => {
     miRutaHoy:          ()        => _request('mis_rutas'),
     misRutas:           ()        => _request('mis_rutas'),
     transportMonitor:   ()        => _request('transport_monitor'),
+    deliveryRoutes:     ()        => _request('delivery_routes'),
+    seleccionarRuta:    (route_id) => _request('route_select', { method: 'POST', body: { route_id } }),
     rutaDetalle:        (id)      => _request('ruta_detalle', { query: { id } }),
     conductores:        ()        => _request('conductores'),
     vehiculos:          ()        => _request('vehiculos'),

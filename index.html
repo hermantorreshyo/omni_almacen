@@ -228,6 +228,14 @@
     .mon-card .mon-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: .82rem; }
     .mon-k { color: #9ca3af; }
     .mon-v { color: #1f2430; font-weight: 700; }
+    /* Banner de ruta del día en el home */
+    .hub-ruta { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: linear-gradient(135deg,#fff7ed,#fff); border: 1px solid #fed7aa; border-radius: 14px; padding: 12px 14px; margin-bottom: 4px; }
+    .hub-ruta-load { color: #9ca3af; font-size: .88rem; }
+    .hub-ruta-k { font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #b45309; }
+    .hub-ruta-v { font-size: 1.05rem; font-weight: 800; color: #1f2430; }
+    .hub-ruta-sub { font-size: .76rem; color: #9ca3af; margin-top: 1px; }
+    .rsel-card.rsel-mine { border-color: #86efac; background: #f0fdf4; }
+    .chip-ok { background: #dcfce7; color: #166534; }
     .td-head { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .td-route { color: #642a72; font-weight: 600; }
     .ali-sub { color: #642a72; font-weight: 600; font-size: .9rem; margin: -6px 0 12px; }
@@ -456,6 +464,7 @@
     <section id="view-hub" class="view wrap hidden">
       <h1 class="sec-title">Operaciones</h1>
       <div id="hub-legend" class="hub-legend"></div>
+      <div id="hub-ruta" class="hub-ruta hidden"></div>
       <div id="hub-tiles" style="display:flex;flex-direction:column;gap:12px;"></div>
     </section>
 
@@ -622,6 +631,13 @@
     </section>
 
     <!-- ── FLUJO 3D: TRANSPORTE ─────────────────────────────────── -->
+    <section id="view-ruta-sel" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Elegir ruta de hoy</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Selecciona la ruta que trabajarás hoy. Solo un conductor por ruta al día.</p>
+      <div id="ruta-sel-list"></div>
+    </section>
+
     <section id="view-transporte" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Ruta de transporte</h1>
@@ -775,10 +791,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260712n"></script>
-  <script src="js/metrology.js?v=20260712n"></script>
-  <script src="js/scanner.js?v=20260712n"></script>
-  <script src="js/outbox-service.js?v=20260712n"></script>
-  <script src="js/app.js?v=20260712n"></script>
+  <script src="js/api-client.js?v=20260712o"></script>
+  <script src="js/metrology.js?v=20260712o"></script>
+  <script src="js/scanner.js?v=20260712o"></script>
+  <script src="js/outbox-service.js?v=20260712o"></script>
+  <script src="js/app.js?v=20260712o"></script>
 </body>
 </html>

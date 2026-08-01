@@ -323,6 +323,80 @@ const App = (() => {
       wrap.appendChild(b);
     });
     view('view-hub');
+    renderRutaBanner(visible);
+  }
+  /* Banner de ruta del día en el home, para quien reparte (tiene "Mis Rutas"). */
+  async function renderRutaBanner(visible) {
+    const box = el('hub-ruta'); if (!box) return;
+    const v = visible || visibleTiles();
+    const esConductor = isSuperAdmin() || v.includes('entregas');
+    if (!esConductor) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    box.innerHTML = '<div class="hub-ruta-load">Cargando tu ruta de hoy…</div>';
+    try {
+      const r = await ApiClient.misRutas();
+      const routes = (r.data && (r.data.routes || r.data)) || [];
+      const conNombre = routes.find((g) => g.delivery_route && g.delivery_route.name);
+      const nombre = conNombre ? conNombre.delivery_route.name : null;
+      const pendientes = routes.reduce((n, g) => n + ((g.stops || []).length), 0);
+      box.innerHTML = `
+        <div class="hub-ruta-main">
+          <div class="hub-ruta-k">Ruta de hoy</div>
+          <div class="hub-ruta-v">${nombre || 'Sin ruta seleccionada'}</div>
+          ${nombre ? `<div class="hub-ruta-sub">${pendientes} entrega${pendientes === 1 ? '' : 's'} pendiente${pendientes === 1 ? '' : 's'}</div>` : ''}
+        </div>
+        <button id="hub-ruta-btn" class="btn-amber-sm">${nombre ? 'Cambiar ruta' : 'Elegir ruta'}</button>`;
+      el('hub-ruta-btn').addEventListener('click', () => openRutaSelector());
+    } catch (e) {
+      logError('hub/ruta', e);
+      box.innerHTML = `<div class="hub-ruta-main"><div class="hub-ruta-v">Ruta de hoy</div></div>
+        <button id="hub-ruta-btn" class="btn-amber-sm">Elegir ruta</button>`;
+      el('hub-ruta-btn').addEventListener('click', () => openRutaSelector());
+    }
+  }
+  /* Selector de ruta del día: lista rutas con su disponibilidad (today_driver). */
+  async function openRutaSelector() {
+    view('view-ruta-sel');
+    const list = el('ruta-sel-list'); list.innerHTML = skeleton();
+    try {
+      const r = await ApiClient.deliveryRoutes();
+      const rutas = rowsOf(r.data);
+      if (!rutas.length) { list.innerHTML = empty('No hay rutas configuradas.'); return; }
+      const miId = Number(state.user && (state.user.user_id ?? state.user.id));
+      list.innerHTML = '';
+      rutas.forEach((rt) => {
+        const tomadaPor = rt.today_driver_id ?? null;
+        const libre = tomadaPor == null;
+        const mia = tomadaPor != null && Number(tomadaPor) === miId;
+        const card = document.createElement('div'); card.className = 'rowcard col rsel-card' + (mia ? ' rsel-mine' : '');
+        const estado = mia ? '✓ Es tu ruta de hoy' : (libre ? 'Libre' : `Tomada por ${rt.today_driver_name || 'otro conductor'}`);
+        card.innerHTML = `<div class="rowcard-top"><b>${rt.name || ('Ruta ' + rt.id)}</b>
+          <span class="chip ${mia ? '' : (libre ? 'chip-ok' : 'chip-amb')}">${estado}</span></div>
+          <small class="tp-sub">${[rt.origin_name ? 'Sale de ' + rt.origin_name : null, rt.stores_count != null ? rt.stores_count + ' tienda' + (rt.stores_count === 1 ? '' : 's') : null].filter(Boolean).join(' · ')}</small>`;
+        if (!mia) {
+          const btn = document.createElement('button');
+          btn.className = libre ? 'btn-prim-sm' : 'btn-amber-sm';
+          btn.textContent = libre ? 'Tomar esta ruta' : 'Tomar (ya asignada)';
+          btn.addEventListener('click', () => tomarRuta(rt, libre));
+          const ctr = document.createElement('div'); ctr.className = 'rowcard-ctrls'; ctr.appendChild(btn);
+          card.appendChild(ctr);
+        }
+        list.appendChild(card);
+      });
+    } catch (e) { logError('ruta-sel', e); list.innerHTML = apiErrorBox([e]); }
+  }
+  async function tomarRuta(rt, libre) {
+    if (!libre && !confirm('Esta ruta ya fue tomada por otro conductor hoy. ¿Tomarla de todas formas?')) return;
+    try {
+      await ApiClient.seleccionarRuta(rt.id);
+      toast(`Ahora trabajas la ruta "${rt.name || rt.id}" hoy.`, 'ok');
+      renderHub();   // vuelve al home con el banner actualizado
+    } catch (e) {
+      logError('ruta-sel/tomar', e);
+      // 409 ERR_STATE: la ruta ya la tomó otro conductor hoy.
+      toast(e.message || 'No se pudo tomar la ruta.', e.code === 'ERR_STATE' ? 'warn' : 'err');
+      openRutaSelector();
+    }
   }
   /* Muestra en el menú los accesos según permisos (dashboard / gestor_permisos). */
   function renderDrawer(visible) {

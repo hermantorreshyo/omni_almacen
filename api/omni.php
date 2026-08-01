@@ -58,6 +58,8 @@ $UP = [
     'routes'               => '/logistics/routes',
     'routes_mine'          => '/logistics/routes/mine',              // GET rutas del conductor (JWT)
     'transport_monitor'    => '/logistics/transport-monitor',        // GET tablero solo lectura (logistics.dispatch)
+    'delivery_routes'      => '/logistics/delivery-routes',           // GET maestro de rutas (con today_driver/origin)
+    'route_select'         => '/logistics/routes/%d/select',          // POST tomar ruta del día (v6.14)
     'route_update'         => '/logistics/routes/%d',                 // PUT dispatch_time + status
     'route_detail'         => '/logistics/routes/%d',                 // GET route + transfers
     'drivers'              => '/logistics/drivers',                   // GET conductores (rol Repartidor)
@@ -468,6 +470,16 @@ switch ($action) {
         if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
         relay(client()->request('PATCH', sprintf($UP['transfer_picking_items'], $id),
             json_encode(['items' => $in['items'] ?? []], JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'delivery_routes': {      // GET /logistics/delivery-routes — para el selector de ruta del día
+        requireAuth();
+        relay(client()->request('GET', $UP['delivery_routes'], null, true));
+    }
+    case 'route_select': {         // POST /logistics/routes/{id}/select — tomar la ruta de hoy
+        requireAuth();
+        $id = (int) (bodyJson()['route_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'route_id inválido.', 422);
+        relay(client()->request('POST', sprintf($UP['route_select'], $id), '{}', true));
     }
     case 'transport_monitor': {    // GET /logistics/transport-monitor — tablero solo lectura
         requireAuth();
