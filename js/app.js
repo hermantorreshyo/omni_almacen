@@ -336,17 +336,34 @@ const App = (() => {
     try {
       const r = await ApiClient.misRutas();
       const routes = (r.data && (r.data.routes || r.data)) || [];
-      const conNombre = routes.find((g) => g.delivery_route && g.delivery_route.name);
-      const nombre = conNombre ? conNombre.delivery_route.name : null;
+      const grp = routes.find((g) => g.delivery_route && g.delivery_route.name) || null;
+      const dr = grp ? grp.delivery_route : null;
+      const nombre = dr ? dr.name : null;
+      const rutaId = dr ? dr.id : null;
       const pendientes = routes.reduce((n, g) => n + ((g.stops || []).length), 0);
+      // ¿Ruta ya iniciada? El core lo refleja en el grupo; respaldo local por si el
+      // conductor acaba de iniciarla en esta sesión.
+      const iniciada = !!(dr && (dr.started_at || dr.is_started || String(dr.status || '').toLowerCase() === 'started'))
+        || (rutaId != null && state._rutaIniciada === rutaId);
+      let acciones = '';
+      if (!nombre) {
+        acciones = '<button id="hub-ruta-btn" class="btn-amber-sm">Elegir ruta</button>';
+      } else if (iniciada) {
+        acciones = '<span class="hub-ruta-started">● En curso</span>';
+      } else {
+        acciones = `<div class="hub-ruta-acts">
+          <button id="hub-ruta-start" class="btn-prim-sm">Iniciar ruta</button>
+          <button id="hub-ruta-btn" class="btn-amber-sm">Cambiar</button></div>`;
+      }
       box.innerHTML = `
         <div class="hub-ruta-main">
           <div class="hub-ruta-k">Ruta de hoy</div>
           <div class="hub-ruta-v">${nombre || 'Sin ruta seleccionada'}</div>
-          ${nombre ? `<div class="hub-ruta-sub">${pendientes} entrega${pendientes === 1 ? '' : 's'} pendiente${pendientes === 1 ? '' : 's'}</div>` : ''}
+          ${nombre ? `<div class="hub-ruta-sub">${pendientes} entrega${pendientes === 1 ? '' : 's'} pendiente${pendientes === 1 ? '' : 's'}${iniciada ? ' · iniciada' : ''}</div>` : ''}
         </div>
-        <button id="hub-ruta-btn" class="btn-amber-sm">${nombre ? 'Cambiar ruta' : 'Elegir ruta'}</button>`;
-      el('hub-ruta-btn').addEventListener('click', () => openRutaSelector());
+        ${acciones}`;
+      const bChg = el('hub-ruta-btn'); if (bChg) bChg.addEventListener('click', () => openRutaSelector());
+      const bStart = el('hub-ruta-start'); if (bStart) bStart.addEventListener('click', () => iniciarRutaHoy(rutaId, nombre));
     } catch (e) {
       logError('hub/ruta', e);
       box.innerHTML = `<div class="hub-ruta-main"><div class="hub-ruta-v">Ruta de hoy</div></div>
@@ -354,7 +371,64 @@ const App = (() => {
       el('hub-ruta-btn').addEventListener('click', () => openRutaSelector());
     }
   }
+  async function iniciarRutaHoy(rutaId, nombre) {
+    if (rutaId == null) { toast('Primero elige una ruta.', 'warn'); return; }
+    if (!confirm(`Al iniciar la ruta "${nombre || rutaId}" ya no podrás cambiarla hoy. ¿Iniciar?`)) return;
+    try {
+      await ApiClient.iniciarRuta(rutaId);
+      state._rutaIniciada = rutaId;            // respaldo local inmediato
+      toast('Ruta iniciada. ¡Buen viaje!', 'ok');
+      renderHub();
+    } catch (e) { logError('ruta/iniciar', e); toast(e.message || 'No se pudo iniciar la ruta.', 'err'); }
+  }
   /* Selector de ruta del día: lista rutas con su disponibilidad (today_driver). */
+  /* Historial de rutas ejecutadas (v6.15). Un solo endpoint; el core filtra por rol. */
+  function openRutaHist() {
+    view('view-ruta-hist');
+    const t = new Date(), f = new Date(Date.now() - 7 * 864e5);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    if (!el('rh-from').value) el('rh-from').value = iso(f);
+    if (!el('rh-to').value) el('rh-to').value = iso(t);
+    loadRutaHist();
+  }
+  async function loadRutaHist() {
+    const list = el('rh-list'); list.innerHTML = skeleton();
+    const q = {};
+    if (el('rh-from').value) q.date_from = el('rh-from').value;
+    if (el('rh-to').value) q.date_to = el('rh-to').value;
+    try {
+      const r = await ApiClient.rutaHistorial(q);
+      const rows = rowsOf(r.data)
+        .sort((a, b) => String(b.assignment_date || '').localeCompare(String(a.assignment_date || '')));
+      if (!rows.length) { list.innerHTML = empty('Sin rutas en el rango seleccionado.'); return; }
+      list.innerHTML = '';
+      rows.forEach((h) => list.appendChild(rutaHistCard(h)));
+    } catch (e) { logError('ruta-hist', e); list.innerHTML = apiErrorBox([e]); }
+  }
+  function rutaHistCard(h) {
+    const c = document.createElement('div'); c.className = 'rowcard col';
+    const dels = h.deliveries || [];
+    const fecha = h.assignment_date || '';
+    const inicio = h.started_at ? fmtDT(h.started_at) : 'Sin iniciar';
+    c.innerHTML = `<div class="rowcard-top"><b>${h.route_name || ('Ruta ' + (h.route_id ?? ''))}</b>
+        <span class="chip">${fecha}</span></div>
+      <small class="tp-sub">${h.driver_name || 'Conductor ' + (h.driver_user_id ?? '')} · Inicio: ${inicio}</small>`;
+    const det = document.createElement('div'); det.className = 'dash-det';
+    if (!dels.length) det.innerHTML = '<div class="td-empty">Sin entregas registradas.</div>';
+    else dels.forEach((d) => {
+      const row = document.createElement('div'); row.className = 'td-item';
+      const enRuta = d.at_en_ruta ? fmtDT(d.at_en_ruta) : '—';
+      const entregado = d.at_pendiente_recepcion ? fmtDT(d.at_pendiente_recepcion) : '—';
+      row.innerHTML = `<div class="td-item-main">
+          <div class="td-item-meta">Traspaso #${d.transfer_id}</div>
+          <div class="td-item-name">${d.dest_name || ('Tienda ' + (d.dest_interlocutor_id ?? ''))}</div>
+        </div>
+        <div class="rh-times"><span>Salió: ${enRuta}</span><span>Entregó: ${entregado}</span></div>`;
+      det.appendChild(row);
+    });
+    c.appendChild(det);
+    return c;
+  }
   async function openRutaSelector() {
     view('view-ruta-sel');
     const list = el('ruta-sel-list'); list.innerHTML = skeleton();
@@ -406,6 +480,8 @@ const App = (() => {
     if (perm) perm.classList.toggle('hidden', !v.includes('gestor_permisos'));
     const mh = el('drawer-merma-hist');
     if (mh) mh.classList.toggle('hidden', !v.includes('merma'));   // mismo permiso que registrar merma
+    const rh = el('drawer-ruta-hist');
+    if (rh) rh.classList.toggle('hidden', !(isSuperAdmin() || v.includes('entregas') || v.includes('transporte')));
   }
   function openDrawer() { el('app-drawer').classList.remove('hidden'); }
   function closeDrawer() { el('app-drawer').classList.add('hidden'); }
@@ -2363,6 +2439,8 @@ const App = (() => {
     el('drawer-hub').addEventListener('click', () => { closeDrawer(); renderHub(); });
     el('drawer-dashboard').addEventListener('click', () => { closeDrawer(); openDashboard(); });
     el('drawer-merma-hist').addEventListener('click', () => { closeDrawer(); openMermaHist(); });
+    el('drawer-ruta-hist').addEventListener('click', () => { closeDrawer(); openRutaHist(); });
+    el('rh-load').addEventListener('click', () => loadRutaHist());
     el('drawer-password').addEventListener('click', () => { closeDrawer(); openPassword(); });
     ['pw-cur', 'pw-new', 'pw-conf'].forEach((id) => el(id).addEventListener('input', updatePwRules));
     el('pw-submit').addEventListener('click', () => submitPassword());

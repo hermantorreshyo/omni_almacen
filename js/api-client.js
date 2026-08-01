@@ -130,6 +130,8 @@ const ApiClient = (() => {
     transportMonitor:   ()        => _request('transport_monitor'),
     deliveryRoutes:     ()        => _request('delivery_routes'),
     seleccionarRuta:    (route_id) => _request('route_select', { method: 'POST', body: { route_id } }),
+    iniciarRuta:        (route_id) => _request('route_start', { method: 'POST', body: { route_id } }),
+    rutaHistorial:      (q = {}) => _request('route_history', { query: q }),
     rutaDetalle:        (id)      => _request('ruta_detalle', { query: { id } }),
     conductores:        ()        => _request('conductores'),
     vehiculos:          ()        => _request('vehiculos'),

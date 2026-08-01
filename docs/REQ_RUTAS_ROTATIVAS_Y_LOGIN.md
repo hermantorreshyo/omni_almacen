@@ -197,3 +197,10 @@ No haremos nada de esto hasta recibir el contrato definitivo.
 
 ---
 *[1003] — Requerimiento para el hilo del API CORE. [1003] no implementa hasta la respuesta.*
+
+
+---
+
+## Adenda v6.15 (2026-08-01) — inicio de ruta + histórico — ✅ IMPLEMENTADO en [1003]
+- **Iniciar ruta** (`POST /logistics/routes/{id}/start`): botón "Iniciar ruta" en el banner del home; al iniciar, se oculta "Cambiar ruta" y el banner muestra "En curso". El core respalda la regla (rechaza `select` con 409 tras iniciar). Respaldo local `state._rutaIniciada` para reflejarlo de inmediato.
+- **Histórico de rutas ejecutadas** (`GET /logistics/route-history`): nueva pantalla "Historial de rutas" en el drawer (visible para conductores y gestores). Filtros Desde/Hasta (default 7 días). Cada ruta con conductor, hora de inicio y entregas por punto (salió/entregó). Un solo endpoint; el core filtra por rol (Repartidor solo ve lo suyo).

@@ -60,6 +60,8 @@ $UP = [
     'transport_monitor'    => '/logistics/transport-monitor',        // GET tablero solo lectura (logistics.dispatch)
     'delivery_routes'      => '/logistics/delivery-routes',           // GET maestro de rutas (con today_driver/origin)
     'route_select'         => '/logistics/routes/%d/select',          // POST tomar ruta del día (v6.14)
+    'route_start'          => '/logistics/routes/%d/start',           // POST iniciar ruta — bloquea cambios (v6.15)
+    'route_history'        => '/logistics/route-history',             // GET histórico de rutas ejecutadas (v6.15)
     'route_update'         => '/logistics/routes/%d',                 // PUT dispatch_time + status
     'route_detail'         => '/logistics/routes/%d',                 // GET route + transfers
     'drivers'              => '/logistics/drivers',                   // GET conductores (rol Repartidor)
@@ -480,6 +482,21 @@ switch ($action) {
         $id = (int) (bodyJson()['route_id'] ?? 0);
         if ($id <= 0) fail('ERR_PARAM', 'route_id inválido.', 422);
         relay(client()->request('POST', sprintf($UP['route_select'], $id), '{}', true));
+    }
+    case 'route_start': {          // POST /logistics/routes/{id}/start — iniciar (bloquea cambios)
+        requireAuth();
+        $id = (int) (bodyJson()['route_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'route_id inválido.', 422);
+        relay(client()->request('POST', sprintf($UP['route_start'], $id), '{}', true));
+    }
+    case 'route_history': {        // GET /logistics/route-history — el core filtra por rol
+        requireAuth();
+        $qs = [];
+        foreach (['date_from', 'date_to', 'route_id', 'driver_user_id'] as $k) {
+            if (isset($_GET[$k]) && $_GET[$k] !== '') $qs[$k] = $_GET[$k];
+        }
+        $url = $UP['route_history'] . ($qs ? ('?' . http_build_query($qs)) : '');
+        relay(client()->request('GET', $url, null, true));
     }
     case 'transport_monitor': {    // GET /logistics/transport-monitor — tablero solo lectura
         requireAuth();

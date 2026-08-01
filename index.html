@@ -236,6 +236,9 @@
     .hub-ruta-sub { font-size: .76rem; color: #9ca3af; margin-top: 1px; }
     .rsel-card.rsel-mine { border-color: #86efac; background: #f0fdf4; }
     .chip-ok { background: #dcfce7; color: #166534; }
+    .hub-ruta-acts { display: flex; flex-direction: column; gap: 6px; flex: none; }
+    .hub-ruta-started { color: #0a7d54; font-weight: 800; font-size: .82rem; white-space: nowrap; }
+    .rh-times { flex: none; display: flex; flex-direction: column; gap: 2px; font-size: .72rem; color: #6b7280; text-align: right; }
     .td-head { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .td-route { color: #642a72; font-weight: 600; }
     .ali-sub { color: #642a72; font-weight: 600; font-size: .9rem; margin: -6px 0 12px; }
@@ -422,6 +425,7 @@
       <button class="drawer-item" id="drawer-hub">Operaciones</button>
       <button class="drawer-item" id="drawer-dashboard">Panel de traspasos</button>
       <button class="drawer-item" id="drawer-merma-hist">Historial de mermas</button>
+      <button class="drawer-item" id="drawer-ruta-hist">Historial de rutas</button>
       <button class="drawer-item" id="drawer-permisos">Gestor de permisos</button>
       <button class="drawer-item" id="drawer-password">Cambiar contraseña</button>
       <button class="drawer-item drawer-logout" id="drawer-logout">Salir</button>
@@ -631,6 +635,18 @@
     </section>
 
     <!-- ── FLUJO 3D: TRANSPORTE ─────────────────────────────────── -->
+    <section id="view-ruta-hist" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Historial de rutas</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Rutas ejecutadas: conductor, inicio y entregas por punto.</p>
+      <div class="mh-filters">
+        <div><div class="field-label">Desde</div><input id="rh-from" type="date" class="txt" /></div>
+        <div><div class="field-label">Hasta</div><input id="rh-to" type="date" class="txt" /></div>
+      </div>
+      <button id="rh-load" class="btn-ok" style="margin-bottom:12px;">Consultar</button>
+      <div id="rh-list"></div>
+    </section>
+
     <section id="view-ruta-sel" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Elegir ruta de hoy</h1>
@@ -791,10 +807,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260712o"></script>
-  <script src="js/metrology.js?v=20260712o"></script>
-  <script src="js/scanner.js?v=20260712o"></script>
-  <script src="js/outbox-service.js?v=20260712o"></script>
-  <script src="js/app.js?v=20260712o"></script>
+  <script src="js/api-client.js?v=20260712p"></script>
+  <script src="js/metrology.js?v=20260712p"></script>
+  <script src="js/scanner.js?v=20260712p"></script>
+  <script src="js/outbox-service.js?v=20260712p"></script>
+  <script src="js/app.js?v=20260712p"></script>
 </body>
 </html>
