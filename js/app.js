@@ -343,8 +343,8 @@ const App = (() => {
       const pendientes = routes.reduce((n, g) => n + ((g.stops || []).length), 0);
       // ¿Ruta ya iniciada? El core lo refleja en el grupo; respaldo local por si el
       // conductor acaba de iniciarla en esta sesión.
-      const iniciada = !!(dr && (dr.started_at || dr.is_started || String(dr.status || '').toLowerCase() === 'started'))
-        || (rutaId != null && state._rutaIniciada === rutaId);
+      // Fuente de verdad: el core expone is_started/can_change explícitos (v6.16).
+      const iniciada = dr ? (dr.is_started === true || dr.can_change === false) : false;
       let acciones = '';
       if (!nombre) {
         acciones = '<button id="hub-ruta-btn" class="btn-amber-sm">Elegir ruta</button>';
@@ -359,7 +359,7 @@ const App = (() => {
         <div class="hub-ruta-main">
           <div class="hub-ruta-k">Ruta de hoy</div>
           <div class="hub-ruta-v">${nombre || 'Sin ruta seleccionada'}</div>
-          ${nombre ? `<div class="hub-ruta-sub">${pendientes} entrega${pendientes === 1 ? '' : 's'} pendiente${pendientes === 1 ? '' : 's'}${iniciada ? ' · iniciada' : ''}</div>` : ''}
+          ${nombre ? `<div class="hub-ruta-sub">${pendientes} entrega${pendientes === 1 ? '' : 's'} pendiente${pendientes === 1 ? '' : 's'}${iniciada ? ' · iniciada' + (dr && dr.started_at ? ' ' + fmtDT(dr.started_at) : '') : ''}</div>` : ''}
         </div>
         ${acciones}`;
       const bChg = el('hub-ruta-btn'); if (bChg) bChg.addEventListener('click', () => openRutaSelector());
@@ -376,9 +376,8 @@ const App = (() => {
     if (!confirm(`Al iniciar la ruta "${nombre || rutaId}" ya no podrás cambiarla hoy. ¿Iniciar?`)) return;
     try {
       await ApiClient.iniciarRuta(rutaId);
-      state._rutaIniciada = rutaId;            // respaldo local inmediato
       toast('Ruta iniciada. ¡Buen viaje!', 'ok');
-      renderHub();
+      renderHub();   // el próximo routes/mine trae is_started=true (fuente de verdad)
     } catch (e) { logError('ruta/iniciar', e); toast(e.message || 'No se pudo iniciar la ruta.', 'err'); }
   }
   /* Selector de ruta del día: lista rutas con su disponibilidad (today_driver). */
