@@ -1355,6 +1355,7 @@ const App = (() => {
       const catMap = faltaCat ? await skuCatMap(items.map((it) => it.item_id)) : {};
       const enriched = items.map((it) => {
         const meta = catMap[String(it.item_id)] || {};
+        const yaGuardado = it.quantity_picked != null;   // el core ya tenía un valor guardado
         const picked = Number(it.quantity_picked ?? it.quantity_requested ?? 0);
         return {
           ...it,
@@ -1363,8 +1364,9 @@ const App = (() => {
           sku_code: it.sku_final_code || meta.sku_final_code || '',
           despachada: picked,
           obs: it.picking_notes || '',
-          nodespacho: picked <= 0 && (it.quantity_picked != null),   // reabre marcado si ya iba en 0
-          done: false,
+          nodespacho: picked <= 0 && yaGuardado,           // reabre marcado si ya iba en 0
+          confirmed: yaGuardado,                            // ya persistido en el core
+          done: yaGuardado,                                 // restaura el check al reabrir
         };
       });
       // Orden: pick_sequence del recorrido (menor primero); sin definir → alfabético.
@@ -1419,10 +1421,10 @@ const App = (() => {
         grid.appendChild(hd);
       }
       const color = CAT_COLORS[catIdx % CAT_COLORS.length];
-      const card = document.createElement('div'); card.className = 'ali-card ali-grouped' + (it.nodespacho ? ' ali-nd-on' : ''); card.id = `ali-card-${i}`;
+      const card = document.createElement('div'); card.className = 'ali-card ali-grouped' + (it.nodespacho ? ' ali-nd-on' : '') + (it.done ? ' ali-done' : ''); card.id = `ali-card-${i}`;
       card.style.setProperty('--cat', color);
       card.innerHTML = `
-        <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" /><span class="ali-head">
+        <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" ${it.done ? 'checked' : ''} /><span class="ali-head">
           <span class="ali-meta">${[it.sku_code, it.category].filter(Boolean).join(' · ')}</span>
           <b class="ali-name">${itemLabel(it)}</b>
         </span></label>
@@ -1440,6 +1442,7 @@ const App = (() => {
         const sync = () => {
           const v = Math.max(0, Number(q.value) || 0);      // sin tope superior; 0 permitido
           it.despachada = Math.round(v * 100) / 100;        // 2 decimales
+          it.confirmed = true;                              // teclear = confirmar → se guarda
           warn.classList.toggle('hidden', it.despachada <= sol);
           const distinto = it.despachada !== sol;
           obs.classList.toggle('obs-req', distinto && !it.nodespacho);
@@ -1447,7 +1450,7 @@ const App = (() => {
           scheduleAliSave();                                // autoguardado
         };
         q.addEventListener('input', sync);
-        obs.addEventListener('input', () => { it.obs = obs.value; scheduleAliSave(); });
+        obs.addEventListener('input', () => { it.obs = obs.value; it.confirmed = true; scheduleAliSave(); });
         nd.addEventListener('change', () => {
           it.nodespacho = nd.checked;
           card.classList.toggle('ali-nd-on', nd.checked);
@@ -1459,6 +1462,9 @@ const App = (() => {
         chk.addEventListener('change', () => {
           it.done = chk.checked;
           card.classList.toggle('ali-done', chk.checked);
+          // Marcar el ítem es confirmarlo: persistir su cantidad actual (tecleada o la
+          // precargada por defecto). Antes esto no guardaba y se perdía el ítem al salir.
+          if (chk.checked) { it.confirmed = true; scheduleAliSave(); }
           updateAliProgress();
         });
       }, 0);
@@ -1497,7 +1503,10 @@ const App = (() => {
   /* Guarda el avance del picking (PATCH /picking-items, no cambia de estado).
      Permite alistar en varias visitas: el picker sale y vuelve sin perder lo hecho. */
   async function savePickingItems() {
-    const items = state.ctx.items;
+    // Solo se guardan los ítems que el operario ya confirmó (check "Marcar") o marcó
+    // como no despachado. Así no se persisten cantidades por defecto sin revisar.
+    const items = state.ctx.items.filter((it) => it.confirmed || it.nodespacho);
+    if (!items.length) return { ok: true, data: null };
     return ApiClient.pickingItems({
       traspaso_id: tId(state.ctx.traspaso),
       items: items.map((it) => {
