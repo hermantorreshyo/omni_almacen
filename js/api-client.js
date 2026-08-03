@@ -123,6 +123,8 @@ const ApiClient = (() => {
     pickingIniciar:     (payload) => _request('picking_iniciar',     { method: 'POST', body: payload }),
     pickingGuardar:     (payload) => _request('picking_guardar',     { method: 'POST', body: payload }),
     pickingItems:       (payload) => _request('picking_items',       { method: 'POST', body: payload }),
+    catalogAreas:       ()        => _request('catalog_areas'),
+    clasificarSku:      (payload) => _request('sku_area', { method: 'POST', body: payload }),
     pickingAlistar:     (payload) => _request('picking_alistar',     { method: 'POST', body: payload }),
     rutasActivas:       (status, extra = {}) => _request('rutas_activas', { query: { ...(status ? { status } : {}), ...extra } }),
     miRutaHoy:          ()        => _request('mis_rutas'),

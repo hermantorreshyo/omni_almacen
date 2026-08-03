@@ -50,6 +50,8 @@ $API_PREFIX = env('OMNI_API_PREFIX', '/api/v1');
 $UP = [
     /* ── Operativo (validado contra colección Postman v6) ── */
     'catalog_skus'         => '/catalog/skus',
+    'catalog_areas'        => '/catalog/areas',                       // GET áreas válidas (ENUM) v6.21
+    'sku_area'             => '/catalog/skus/%d/area',                // PUT clasificar SKU en área por sede
     'catalog_locations'    => '/catalog/locations',
     'catalog_interlocutors'=> '/catalog/interlocutors',
     'catalog_employees'    => '/catalog/employees',
@@ -335,6 +337,21 @@ switch ($action) {
         $qs = $_GET; unset($qs['action'], $qs['resource']);
         $path = $UP[$MAP[$resource]] . ($qs ? '?' . http_build_query($qs) : '');
         relay(client()->request('GET', $path, null, true));
+    }
+
+    case 'catalog_areas': {        // GET /catalog/areas — lista de áreas válidas (para el desplegable)
+        requireAuth();
+        relay(client()->request('GET', $UP['catalog_areas'], null, true));
+    }
+    case 'sku_area': {             // PUT /catalog/skus/{id}/area — clasificar SKU en área por sede
+        requireAuth();
+        $in = bodyJson();
+        $id = (int) ($in['sku_id'] ?? 0);
+        $sede = (int) ($in['interlocutor_id'] ?? 0);
+        if ($id <= 0 || $sede <= 0) fail('ERR_PARAM', 'sku_id e interlocutor_id son obligatorios.', 422);
+        $body = ['interlocutor_id' => $sede];
+        if (!empty($in['area_type'])) $body['area_type'] = (string) $in['area_type'];   // vacío = quitar clasificación
+        relay(client()->request('PUT', sprintf($UP['sku_area'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
     }
 
     case 'stock': {

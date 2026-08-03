@@ -1349,19 +1349,15 @@ const App = (() => {
         header = d.transfer || t;
         items = d.items || d.details || [];
       } catch (e) { logError('picking/detalle', e); items = await transferItems(t); }
-      // Opción B: el detalle del traspaso ya trae category_name/pick_sequence/family por ítem.
-      // El cruce con catálogo queda solo como fallback (ítems supplier_item o datos faltantes).
-      const faltaCat = items.some((it) => it.item_type === 'sku' && !it.category_name);
-      const catMap = faltaCat ? await skuCatMap(items.map((it) => it.item_id)) : {};
       const enriched = items.map((it) => {
-        const meta = catMap[String(it.item_id)] || {};
         const yaGuardado = it.quantity_picked != null;   // el core ya tenía un valor guardado
         const picked = Number(it.quantity_picked ?? it.quantity_requested ?? 0);
         return {
           ...it,
-          category: it.category_name || meta.category || 'Sin categoría',
-          pickSeq: it.pick_sequence != null ? Number(it.pick_sequence) : (meta.pick_sequence ?? null),
-          sku_code: it.sku_final_code || meta.sku_final_code || '',
+          // v6.21: el picking agrupa por ÁREA (organización física), no por categoría.
+          area: it.area_type || null,                     // null = "Sin Clasificar"
+          areaSeq: it.area_pick_sequence != null ? Number(it.area_pick_sequence) : null,
+          sku_code: it.sku_final_code || '',
           despachada: picked,
           obs: it.picking_notes || '',
           nodespacho: picked <= 0 && yaGuardado,           // reabre marcado si ya iba en 0
@@ -1369,35 +1365,68 @@ const App = (() => {
           done: yaGuardado,                                 // restaura el check al reabrir
         };
       });
-      // Orden: pick_sequence del recorrido (menor primero); sin definir → alfabético.
-      // Los ítems sin categoría (supplier_item) van al final.
-      enriched.sort((a, b) => {
-        const sa = a.pickSeq, sb = b.pickSeq;
-        if (sa != null && sb != null && sa !== sb) return sa - sb;
-        if (sa != null && sb == null) return -1;
-        if (sa == null && sb != null) return 1;
-        return String(a.category).localeCompare(String(b.category)) ||
-               String(itemLabel(a)).localeCompare(String(itemLabel(b)));
-      });
-      state.ctx = { traspaso: t, header, items: enriched };
+      // El core YA entrega los ítems ordenados (por área y su orden de recorrido; los
+      // "Sin Clasificar" al final). No se reordena aquí.
+      state.ctx = {
+        traspaso: t, header, items: enriched,
+        origenId: header.interlocutor_id_origin ?? originIntOf(header) ?? null,   // sede donde se hace el picking
+      };
       renderAlistar();
     } catch (e) { logError('picking/abrir', e); toast(e.message || 'No se pudo abrir el alistado.', 'err'); }
   }
-  /* Fallback: mapa item_id → {category, pick_sequence, sku_final_code} desde el catálogo.
-     Solo se usa si el detalle del traspaso no trajo la categoría (ítems supplier_item). */
-  async function skuCatMap(ids) {
-    const map = {};
+  /* Áreas para el desplegable de clasificación (v6.21). Se cachea por sesión. */
+  async function loadAreas() {
+    if (state._areas) return state._areas;
     try {
-      const all = await fetchAllSkus({ status: 'active', limit: 400 });
-      all.forEach((s) => {
-        map[String(s.id)] = {
-          category: s.category_name || s.family_name || '',
-          pick_sequence: s.pick_sequence != null ? Number(s.pick_sequence) : null,
-          sku_final_code: s.sku_final_code || '',
-        };
-      });
-    } catch (e) { logError('picking/catmap', e); }
-    return map;
+      const r = await ApiClient.catalogAreas();
+      const arr = Array.isArray(r.data) ? r.data : (r.data && r.data.areas) || [];
+      state._areas = arr;
+    } catch (e) { logError('picking/areas', e); state._areas = []; }
+    return state._areas;
+  }
+  /* Nombre legible de un area_type (ej. "camara_fria" → "Camara fria"). */
+  function areaNombre(a) {
+    if (!a) return 'Sin Clasificar';
+    return String(a).replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  }
+  async function fillAreaSelect(sel) {
+    const areas = await loadAreas();
+    areas.forEach((a) => {
+      const o = document.createElement('option'); o.value = a; o.textContent = areaNombre(a); sel.appendChild(o);
+    });
+  }
+  /* Clasifica un SKU "Sin Clasificar" en un área, para la sede de ORIGEN del traspaso.
+     Al guardar, reubica el ítem en su nueva área sin recargar toda la pantalla. */
+  async function clasificarItem(it, areaType, idx) {
+    const sede = state.ctx.origenId;
+    if (!sede) { toast('No se pudo determinar la sede de origen.', 'err'); return; }
+    const sel = el(`ali-area-${idx}`); if (sel) sel.disabled = true;
+    try {
+      await ApiClient.clasificarSku({ sku_id: it.item_id, interlocutor_id: sede, area_type: areaType });
+      it.area = areaType;
+      it.areaSeq = null;   // el orden fino lo define la sede; basta reubicar por área
+      toast(`Clasificado en "${areaNombre(areaType)}".`, 'ok');
+      // Reordenar: agrupar por área (con nombre), "Sin Clasificar" al final, y repintar.
+      reordenarPorArea();
+      renderAlistar();
+    } catch (e) {
+      logError('picking/clasificar', e);
+      toast(e.message || 'No se pudo clasificar el ítem.', 'err');
+      if (sel) sel.disabled = false;
+    }
+  }
+  /* Reordena los ítems del picking por área tras una clasificación manual. */
+  function reordenarPorArea() {
+    state.ctx.items.sort((a, b) => {
+      const an = a.area == null, bn = b.area == null;
+      if (an !== bn) return an ? 1 : -1;                 // Sin Clasificar al final
+      const sa = a.areaSeq, sb = b.areaSeq;
+      if (sa != null && sb != null && sa !== sb) return sa - sb;
+      if (sa != null && sb == null) return -1;
+      if (sa == null && sb != null) return 1;
+      return String(a.area || '').localeCompare(String(b.area || '')) ||
+             String(itemLabel(a)).localeCompare(String(itemLabel(b)));
+    });
   }
   function renderAlistar() {
     view('view-alistar');
@@ -1405,29 +1434,32 @@ const App = (() => {
     el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
     el('alistar-sub').textContent = `Solicita: ${intNameById(destIntOf(h))}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
     const grid = el('alistar-grid'); grid.innerHTML = '';
-    // Cuenta de ítems por categoría (para el badge del encabezado).
-    const catCount = {};
-    state.ctx.items.forEach((it) => { catCount[it.category] = (catCount[it.category] || 0) + 1; });
-    let lastCat = null, catIdx = -1;
+    // Agrupamiento por ÁREA (v6.21). "Sin Clasificar" para area = null.
+    const areaLabel = (a) => a ? areaNombre(a) : 'Sin Clasificar';
+    const areaCount = {};
+    state.ctx.items.forEach((it) => { const k = it.area || '__none__'; areaCount[k] = (areaCount[k] || 0) + 1; });
+    let lastArea = '__init__', catIdx = -1;
     const CAT_COLORS = ['#642a72', '#2563eb', '#0a7d54', '#b45309', '#be185d', '#0e7490', '#7c3aed'];
     state.ctx.items.forEach((it, i) => {
       const sol = Number(it.quantity_requested ?? 0);
-      if (it.category !== lastCat) {                        // banda de categoría
-        lastCat = it.category; catIdx++;
-        const color = CAT_COLORS[catIdx % CAT_COLORS.length];
-        const hd = document.createElement('div'); hd.className = 'ali-cat';
+      const areaKey = it.area || '__none__';
+      if (areaKey !== lastArea) {                           // banda de área
+        lastArea = areaKey; catIdx++;
+        const color = it.area ? CAT_COLORS[catIdx % CAT_COLORS.length] : '#9ca3af';
+        const hd = document.createElement('div'); hd.className = 'ali-cat' + (it.area ? '' : ' ali-cat-none');
         hd.style.setProperty('--cat', color);
-        hd.innerHTML = `<span class="ali-cat-dot"></span><span class="ali-cat-name">${it.category}</span><span class="ali-cat-n">${catCount[it.category]}</span>`;
+        hd.innerHTML = `<span class="ali-cat-dot"></span><span class="ali-cat-name">${areaLabel(it.area)}</span><span class="ali-cat-n">${areaCount[areaKey]}</span>`;
         grid.appendChild(hd);
       }
-      const color = CAT_COLORS[catIdx % CAT_COLORS.length];
+      const color = it.area ? CAT_COLORS[catIdx % CAT_COLORS.length] : '#9ca3af';
       const card = document.createElement('div'); card.className = 'ali-card ali-grouped' + (it.nodespacho ? ' ali-nd-on' : '') + (it.done ? ' ali-done' : ''); card.id = `ali-card-${i}`;
       card.style.setProperty('--cat', color);
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" ${it.done ? 'checked' : ''} /><span class="ali-head">
-          <span class="ali-meta">${[it.sku_code, it.category].filter(Boolean).join(' · ')}</span>
+          <span class="ali-meta">${[it.sku_code, it.category_name].filter(Boolean).join(' · ')}</span>
           <b class="ali-name">${itemLabel(it)}</b>
         </span></label>
+        ${!it.area ? `<div class="ali-clasif"><span class="ali-clasif-lbl">Clasificar en área:</span><select id="ali-area-${i}" class="ali-area-sel"><option value="">Elegir área…</option></select></div>` : ''}
         <div class="oc-card-sub">Solicitada: <b>${fmtQty(sol)}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
         <div class="oc-row2">
           <div><div class="field-label">Despachada</div>
@@ -1459,6 +1491,15 @@ const App = (() => {
           sync();
         });
         if (it.nodespacho) q.disabled = true;
+        // Desplegable de clasificación (solo ítems "Sin Clasificar").
+        const areaSel = el(`ali-area-${i}`);
+        if (areaSel) {
+          fillAreaSelect(areaSel);
+          areaSel.addEventListener('change', () => {
+            const val = areaSel.value;
+            if (val) clasificarItem(it, val, i);
+          });
+        }
         chk.addEventListener('change', () => {
           it.done = chk.checked;
           card.classList.toggle('ali-done', chk.checked);
