@@ -408,10 +408,14 @@ const App = (() => {
     const c = document.createElement('div'); c.className = 'rowcard col';
     const dels = h.deliveries || [];
     const fecha = h.assignment_date || '';
-    const inicio = h.started_at ? fmtDT(h.started_at) : 'Sin iniciar';
+    // route_source: "ruta_por_defecto" (lo normal) o "seleccionada_ese_dia".
+    const porDefecto = h.route_source === 'ruta_por_defecto';
+    const origen = porDefecto ? 'Ruta por defecto' : 'Ruta elegida';
+    // started_at puede ser null cuando operó con su ruta por defecto (no es un error).
+    const inicio = h.started_at ? ('Inicio ' + fmtDT(h.started_at)) : (porDefecto ? 'Sin inicio explícito' : 'Sin iniciar');
     c.innerHTML = `<div class="rowcard-top"><b>${h.route_name || ('Ruta ' + (h.route_id ?? ''))}</b>
         <span class="chip">${fecha}</span></div>
-      <small class="tp-sub">${h.driver_name || 'Conductor ' + (h.driver_user_id ?? '')} · Inicio: ${inicio}</small>`;
+      <small class="tp-sub">${h.driver_name || 'Conductor ' + (h.driver_user_id ?? '')} · ${origen} · ${inicio} · ${dels.length} entrega${dels.length === 1 ? '' : 's'}</small>`;
     const det = document.createElement('div'); det.className = 'dash-det';
     if (!dels.length) det.innerHTML = '<div class="td-empty">Sin entregas registradas.</div>';
     else dels.forEach((d) => {
@@ -1331,7 +1335,13 @@ const App = (() => {
   // start=false reabre una solicitud ya asignada (EN_PICKING) sin re-iniciar.
   async function openAlistarFor(t, start) {
     try {
-      if (start) await ApiClient.pickingIniciar({ traspaso_id: tId(t) });   // → EN_PICKING (bloqueo/asignación)
+      // v6.19: al abrir un SOLICITADO, mover a EN_PICKING de inmediato (PUT /picking {items:[]}),
+      // para que un refresco no pierda que el picking empezó. Si ya está EN_PICKING
+      // (otra pestaña/carrera), el core responde ERR_STATE → se ignora y se continúa.
+      if (start) {
+        try { await ApiClient.pickingIniciar({ traspaso_id: tId(t) }); }
+        catch (e) { if (e && e.code !== 'ERR_STATE') logError('picking/iniciar', e); }
+      }
       let header = t, items = [];
       try {
         const r = await ApiClient.traspasoDetalle(tId(t));
