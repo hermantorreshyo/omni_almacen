@@ -1355,7 +1355,10 @@ const App = (() => {
         return {
           ...it,
           // v6.21: el picking agrupa por ÁREA (organización física), no por categoría.
-          area: it.area_type || null,                     // null = "Sin Clasificar"
+          // v6.23: el área es una entidad real (area_id + area_name). Se agrupa por area_id.
+          areaId: it.area_id != null ? Number(it.area_id) : null,   // null = "Sin Clasificar"
+          area: it.area_name || null,                               // nombre para mostrar
+          areaType: it.area_type || null,                           // descriptor secundario (ícono/color)
           areaSeq: it.area_pick_sequence != null ? Number(it.area_pick_sequence) : null,
           sku_code: it.sku_final_code || '',
           despachada: picked,
@@ -1374,39 +1377,43 @@ const App = (() => {
       renderAlistar();
     } catch (e) { logError('picking/abrir', e); toast(e.message || 'No se pudo abrir el alistado.', 'err'); }
   }
-  /* Áreas para el desplegable de clasificación (v6.21). Se cachea por sesión. */
-  async function loadAreas() {
-    if (state._areas) return state._areas;
+  /* Áreas reales de la sede de origen para el desplegable (v6.23). Cacheado por sede. */
+  async function loadAreas(sedeId) {
+    state._areasBySede = state._areasBySede || {};
+    if (state._areasBySede[sedeId]) return state._areasBySede[sedeId];
+    let arr = [];
     try {
-      const r = await ApiClient.catalogAreas();
-      const arr = Array.isArray(r.data) ? r.data : (r.data && r.data.areas) || [];
-      state._areas = arr;
-    } catch (e) { logError('picking/areas', e); state._areas = []; }
-    return state._areas;
+      const r = await ApiClient.catalogAreas(sedeId);
+      arr = Array.isArray(r.data) ? r.data : (r.data && r.data.areas) || [];
+    } catch (e) { logError('picking/areas', e); }
+    state._areasBySede[sedeId] = arr;
+    return arr;
   }
-  /* Nombre legible de un area_type (ej. "camara_fria" → "Camara fria"). */
-  function areaNombre(a) {
-    if (!a) return 'Sin Clasificar';
-    return String(a).replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  /* Nombre legible de un area_type (descriptor secundario). */
+  function areaTipoNombre(a) {
+    if (!a) return '';
+    return String(a).replace(/_/g, ' ').replace(/^\\w/, (c) => c.toUpperCase());
   }
-  async function fillAreaSelect(sel) {
-    const areas = await loadAreas();
+  /* Rellena el desplegable con las áreas reales de la sede. Devuelve cuántas hay. */
+  async function fillAreaSelect(sel, sedeId) {
+    const areas = await loadAreas(sedeId);
     areas.forEach((a) => {
-      const o = document.createElement('option'); o.value = a; o.textContent = areaNombre(a); sel.appendChild(o);
+      const o = document.createElement('option'); o.value = a.id; o.textContent = a.name || areaTipoNombre(a.area_type);
+      o.dataset.name = a.name || areaTipoNombre(a.area_type); sel.appendChild(o);
     });
+    return areas.length;
   }
-  /* Clasifica un SKU "Sin Clasificar" en un área, para la sede de ORIGEN del traspaso.
-     Al guardar, reubica el ítem en su nueva área sin recargar toda la pantalla. */
-  async function clasificarItem(it, areaType, idx) {
+  /* Clasifica un SKU "Sin Clasificar" en un área real (area_id), sede de ORIGEN. */
+  async function clasificarItem(it, areaId, areaName, idx) {
     const sede = state.ctx.origenId;
     if (!sede) { toast('No se pudo determinar la sede de origen.', 'err'); return; }
     const sel = el(`ali-area-${idx}`); if (sel) sel.disabled = true;
     try {
-      await ApiClient.clasificarSku({ sku_id: it.item_id, interlocutor_id: sede, area_type: areaType });
-      it.area = areaType;
+      await ApiClient.clasificarSku({ sku_id: it.item_id, interlocutor_id: sede, area_id: areaId });
+      it.areaId = Number(areaId);
+      it.area = areaName || null;
       it.areaSeq = null;   // el orden fino lo define la sede; basta reubicar por área
-      toast(`Clasificado en "${areaNombre(areaType)}".`, 'ok');
-      // Reordenar: agrupar por área (con nombre), "Sin Clasificar" al final, y repintar.
+      toast(`Clasificado en "${areaName || 'área'}".`, 'ok');
       reordenarPorArea();
       renderAlistar();
     } catch (e) {
@@ -1418,7 +1425,7 @@ const App = (() => {
   /* Reordena los ítems del picking por área tras una clasificación manual. */
   function reordenarPorArea() {
     state.ctx.items.sort((a, b) => {
-      const an = a.area == null, bn = b.area == null;
+      const an = a.areaId == null, bn = b.areaId == null;
       if (an !== bn) return an ? 1 : -1;                 // Sin Clasificar al final
       const sa = a.areaSeq, sb = b.areaSeq;
       if (sa != null && sb != null && sa !== sb) return sa - sb;
@@ -1434,21 +1441,21 @@ const App = (() => {
     el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
     el('alistar-sub').textContent = `Solicita: ${intNameById(destIntOf(h))}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
     const grid = el('alistar-grid'); grid.innerHTML = '';
-    // Agrupamiento por ÁREA (v6.21). "Sin Clasificar" para area = null.
-    const areaLabel = (a) => a ? areaNombre(a) : 'Sin Clasificar';
+    // Agrupamiento por ÁREA real (v6.23): clave = area_id; encabezado = area_name.
+    const areaLabel = (it) => it.area || 'Sin Clasificar';
     const areaCount = {};
-    state.ctx.items.forEach((it) => { const k = it.area || '__none__'; areaCount[k] = (areaCount[k] || 0) + 1; });
+    state.ctx.items.forEach((it) => { const k = it.areaId != null ? 'a' + it.areaId : '__none__'; areaCount[k] = (areaCount[k] || 0) + 1; });
     let lastArea = '__init__', catIdx = -1;
     const CAT_COLORS = ['#642a72', '#2563eb', '#0a7d54', '#b45309', '#be185d', '#0e7490', '#7c3aed'];
     state.ctx.items.forEach((it, i) => {
       const sol = Number(it.quantity_requested ?? 0);
-      const areaKey = it.area || '__none__';
+      const areaKey = it.areaId != null ? 'a' + it.areaId : '__none__';
       if (areaKey !== lastArea) {                           // banda de área
         lastArea = areaKey; catIdx++;
-        const color = it.area ? CAT_COLORS[catIdx % CAT_COLORS.length] : '#9ca3af';
-        const hd = document.createElement('div'); hd.className = 'ali-cat' + (it.area ? '' : ' ali-cat-none');
+        const color = it.areaId != null ? CAT_COLORS[catIdx % CAT_COLORS.length] : '#9ca3af';
+        const hd = document.createElement('div'); hd.className = 'ali-cat' + (it.areaId != null ? '' : ' ali-cat-none');
         hd.style.setProperty('--cat', color);
-        hd.innerHTML = `<span class="ali-cat-dot"></span><span class="ali-cat-name">${areaLabel(it.area)}</span><span class="ali-cat-n">${areaCount[areaKey]}</span>`;
+        hd.innerHTML = `<span class="ali-cat-dot"></span><span class="ali-cat-name">${areaLabel(it)}</span><span class="ali-cat-n">${areaCount[areaKey]}</span>`;
         grid.appendChild(hd);
       }
       const color = it.area ? CAT_COLORS[catIdx % CAT_COLORS.length] : '#9ca3af';
@@ -1459,7 +1466,7 @@ const App = (() => {
           <span class="ali-meta">${[it.sku_code, it.category_name].filter(Boolean).join(' · ')}</span>
           <b class="ali-name">${itemLabel(it)}</b>
         </span></label>
-        ${!it.area ? `<div class="ali-clasif"><span class="ali-clasif-lbl">Clasificar en área:</span><select id="ali-area-${i}" class="ali-area-sel"><option value="">Elegir área…</option></select></div>` : ''}
+        ${it.areaId == null ? `<div class="ali-clasif"><span class="ali-clasif-lbl">Clasificar en área:</span><select id="ali-area-${i}" class="ali-area-sel"><option value="">Elegir área…</option></select></div>` : ''}
         <div class="oc-card-sub">Solicitada: <b>${fmtQty(sol)}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
         <div class="oc-row2">
           <div><div class="field-label">Despachada</div>
@@ -1494,10 +1501,16 @@ const App = (() => {
         // Desplegable de clasificación (solo ítems "Sin Clasificar").
         const areaSel = el(`ali-area-${i}`);
         if (areaSel) {
-          fillAreaSelect(areaSel);
+          fillAreaSelect(areaSel, state.ctx.origenId).then((n) => {
+            if (!n) {   // la sede de origen no tiene áreas configuradas
+              const cont = areaSel.closest('.ali-clasif');
+              if (cont) cont.innerHTML = '<span class="ali-clasif-empty">Esta sede no tiene áreas configuradas. Contacta al administrador.</span>';
+            }
+          });
           areaSel.addEventListener('change', () => {
+            const opt = areaSel.selectedOptions[0];
             const val = areaSel.value;
-            if (val) clasificarItem(it, val, i);
+            if (val) clasificarItem(it, val, opt ? (opt.dataset.name || opt.textContent) : '', i);
           });
         }
         chk.addEventListener('change', () => {

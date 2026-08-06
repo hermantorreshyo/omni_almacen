@@ -339,9 +339,12 @@ switch ($action) {
         relay(client()->request('GET', $path, null, true));
     }
 
-    case 'catalog_areas': {        // GET /catalog/areas — lista de áreas válidas (para el desplegable)
+    case 'catalog_areas': {        // GET /catalog/areas?interlocutor_id= — áreas reales de la sede
         requireAuth();
-        relay(client()->request('GET', $UP['catalog_areas'], null, true));
+        $qs = [];
+        if (!empty($_GET['interlocutor_id'])) $qs['interlocutor_id'] = (int) $_GET['interlocutor_id'];
+        $url = $UP['catalog_areas'] . ($qs ? ('?' . http_build_query($qs)) : '');
+        relay(client()->request('GET', $url, null, true));
     }
     case 'sku_area': {             // PUT /catalog/skus/{id}/area — clasificar SKU en área por sede
         requireAuth();
@@ -350,7 +353,7 @@ switch ($action) {
         $sede = (int) ($in['interlocutor_id'] ?? 0);
         if ($id <= 0 || $sede <= 0) fail('ERR_PARAM', 'sku_id e interlocutor_id son obligatorios.', 422);
         $body = ['interlocutor_id' => $sede];
-        if (!empty($in['area_type'])) $body['area_type'] = (string) $in['area_type'];   // vacío = quitar clasificación
+        if (!empty($in['area_id'])) $body['area_id'] = (int) $in['area_id'];   // vacío/ausente = quitar clasificación
         relay(client()->request('PUT', sprintf($UP['sku_area'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
     }
 
