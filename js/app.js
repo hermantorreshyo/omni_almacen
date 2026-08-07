@@ -1270,6 +1270,14 @@ const App = (() => {
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
 
+  function fmtDate(s) {
+    if (!s) return '';
+    const d = new Date(String(s).replace(' ', 'T'));
+    if (isNaN(d)) return String(s);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  }
+
   // Picking: solo solicitudes cuyo ORIGEN es mi interlocutor. Incluye SOLICITADO
   // (nuevas) y EN_PICKING (asignadas a mí, reabribles hasta cambiar de estado).
   const PICKING_STATES = ['SOLICITADO', 'EN_PICKING'];
@@ -1302,18 +1310,82 @@ const App = (() => {
     const mine = Number(state.interlocutor);
     const mias = rows.filter((t) => { const o = originIntOf(t); return o == null || o === mine; });
     if (!mias.length) { list.innerHTML = empty('No hay solicitudes para tu almacén.'); return; }
-    list.innerHTML = '';
+    // Consolidación SOLO de vista: agrupar por tienda destino + fecha (día).
+    const groups = {};
     mias.forEach((t) => {
-      const st = String(tState(t)).toUpperCase();
+      const dest = destIntOf(t);
+      const dia = String(transferDate(t) || '').slice(0, 10);
+      const key = `${dest}|${dia}`;
+      (groups[key] = groups[key] || { dest, dia, traspasos: [] }).traspasos.push(t);
+    });
+    const orden = Object.values(groups).sort((a, b) => String(b.dia).localeCompare(String(a.dia)));
+    list.innerHTML = '';
+    orden.forEach((g) => {
+      const varios = g.traspasos.length > 1;
+      const algunoEnPicking = g.traspasos.some((t) => String(tState(t)).toUpperCase() === 'EN_PICKING');
       const c = document.createElement('button'); c.className = 'rowcard';
-      const badge = st === 'EN_PICKING'
+      const badge = algunoEnPicking
         ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
         : '<span class="chip">SOLICITADO</span>';
-      c.innerHTML = `<div><b>Traspaso #${tId(t)}</b>
-        <small>Solicita: ${t.dest_sede || intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small></div>${badge}`;
-      c.addEventListener('click', () => openAlistarFor(t, st !== 'EN_PICKING').catch(() => {}));
+      const nombre = g.traspasos[0].dest_sede || intNameById(g.dest);
+      const sub = varios
+        ? `${g.traspasos.length} pedidos${g.dia ? ' · ' + fmtDate(g.dia) : ''}`
+        : `Traspaso #${tId(g.traspasos[0])}${g.dia ? ' · ' + fmtDate(g.dia) : ''}`;
+      c.innerHTML = `<div><b>${nombre}</b><small>${sub}</small></div>${badge}`;
+      c.addEventListener('click', () => openAlistarGroup(g).catch(() => {}));
       list.appendChild(c);
     });
+  }
+  /* Abre el picking consolidado de un grupo (varios traspasos de la misma tienda+fecha). */
+  async function openAlistarGroup(g) {
+    // Inicia (SOLICITADO→EN_PICKING) los traspasos que aún estén en SOLICITADO.
+    for (const t of g.traspasos) {
+      if (String(tState(t)).toUpperCase() !== 'EN_PICKING') {
+        try { await ApiClient.pickingIniciar({ traspaso_id: tId(t) }); }
+        catch (e) { if (e && e.code !== 'ERR_STATE') logError('picking/iniciar', e); }
+      }
+    }
+    try {
+      let header = g.traspasos[0], allItems = [];
+      for (const t of g.traspasos) {
+        let items = [];
+        try {
+          const r = await ApiClient.traspasoDetalle(tId(t));
+          const d = r?.data ?? {};
+          if (t === g.traspasos[0] && d.transfer) header = d.transfer;
+          items = d.items || d.details || [];
+        } catch (e) { logError('picking/detalle', e); items = await transferItems(t); }
+        // Cada ítem recuerda a qué traspaso pertenece (rastro para guardar/despachar).
+        items.forEach((it) => allItems.push(enrichPickItem(it, t)));
+      }
+      // El core ya entrega ordenado por traspaso; reordenamos el conjunto por área.
+      state.ctx = {
+        grupo: g, traspaso: g.traspasos[0], header, items: allItems,
+        origenId: header.interlocutor_id_origin ?? originIntOf(header) ?? null,
+        multi: g.traspasos.length > 1,
+      };
+      reordenarPorArea();
+      renderAlistar();
+    } catch (e) { logError('picking/abrir-grupo', e); toast(e.message || 'No se pudo abrir el alistado.', 'err'); }
+  }
+  /* Enriquece un ítem de picking con su área y el traspaso de origen. */
+  function enrichPickItem(it, t) {
+    const yaGuardado = it.quantity_picked != null;
+    const picked = Number(it.quantity_picked ?? it.quantity_requested ?? 0);
+    return {
+      ...it,
+      _tid: tId(t),                                     // traspaso al que pertenece
+      areaId: it.area_id != null ? Number(it.area_id) : null,
+      area: it.area_name || null,
+      areaType: it.area_type || null,
+      areaSeq: it.area_pick_sequence != null ? Number(it.area_pick_sequence) : null,
+      sku_code: it.sku_final_code || '',
+      despachada: picked,
+      obs: it.picking_notes || '',
+      nodespacho: picked <= 0 && yaGuardado,
+      confirmed: yaGuardado,
+      done: yaGuardado,
+    };
   }
   /* El listado de traspasos no anida ítems; se obtienen del detalle /{id}. */
   async function transferItems(t) {
@@ -1455,8 +1527,15 @@ const App = (() => {
   function renderAlistar() {
     view('view-alistar');
     const h = state.ctx.header;
-    el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
-    el('alistar-sub').textContent = `Solicita: ${intNameById(destIntOf(h))}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
+    const g = state.ctx.grupo;
+    const nombreDest = g ? (g.traspasos[0].dest_sede || intNameById(g.dest)) : intNameById(destIntOf(h));
+    if (state.ctx.multi) {
+      el('alistar-title').textContent = `Alistar · ${nombreDest}`;
+      el('alistar-sub').textContent = `${g.traspasos.length} pedidos (${g.traspasos.map((t) => '#' + tId(t)).join(', ')})${g.dia ? ' · ' + fmtDate(g.dia) : ''}`;
+    } else {
+      el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
+      el('alistar-sub').textContent = `Solicita: ${nombreDest}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
+    }
     const grid = el('alistar-grid'); grid.innerHTML = '';
     // Agrupamiento por ÁREA real (v6.23): clave = area_id; encabezado = area_name.
     const areaLabel = (it) => it.area || 'Sin Clasificar';
@@ -1480,7 +1559,7 @@ const App = (() => {
       card.style.setProperty('--cat', color);
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" ${it.done ? 'checked' : ''} /><span class="ali-head">
-          <span class="ali-meta">${[it.sku_code, it.category_name].filter(Boolean).join(' · ')}</span>
+          <span class="ali-meta">${[it.sku_code, it.category_name].filter(Boolean).join(' · ')}${state.ctx.multi ? ` · <b class="ali-ped">Pedido #${it._tid}</b>` : ''}</span>
           <b class="ali-name">${itemLabel(it)}</b>
         </span></label>
         <div class="ali-clasif${it.areaId != null ? ' ali-clasif-set' : ''}"><span class="ali-clasif-lbl">${it.areaId == null ? 'Clasificar en área:' : 'Área:'}</span><select id="ali-area-${i}" class="ali-area-sel"><option value="">${it.areaId == null ? 'Elegir área…' : 'Sin clasificar'}</option></select></div>
@@ -1578,22 +1657,24 @@ const App = (() => {
   /* Guarda el avance del picking (PATCH /picking-items, no cambia de estado).
      Permite alistar en varias visitas: el picker sale y vuelve sin perder lo hecho. */
   async function savePickingItems() {
-    // Solo se guardan los ítems que el operario ya confirmó (check "Marcar") o marcó
-    // como no despachado. Así no se persisten cantidades por defecto sin revisar.
+    // Solo se guardan los ítems confirmados o no despachados. Se agrupan por traspaso
+    // de origen (_tid) → un PATCH por traspaso, para soportar picking consolidado.
     const items = state.ctx.items.filter((it) => it.confirmed || it.nodespacho);
     if (!items.length) return { ok: true, data: null };
-    return ApiClient.pickingItems({
-      traspaso_id: tId(state.ctx.traspaso),
-      items: items.map((it) => {
-        const q = it.nodespacho ? 0 : Math.round((Number(it.despachada) || 0) * 100) / 100;
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_picked: q };
-        const note = it.nodespacho
-          ? ('NO DESPACHADO' + (it.obs.trim() && it.obs.trim() !== 'No despachado' ? ' — ' + it.obs.trim() : ''))
-          : it.obs.trim();
-        if (note) o.notes = note;
-        return o;
-      }),
+    const porTraspaso = {};
+    items.forEach((it) => {
+      const tid = it._tid ?? tId(state.ctx.traspaso);
+      const q = it.nodespacho ? 0 : Math.round((Number(it.despachada) || 0) * 100) / 100;
+      const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_picked: q };
+      const note = it.nodespacho
+        ? ('NO DESPACHADO' + (it.obs.trim() && it.obs.trim() !== 'No despachado' ? ' — ' + it.obs.trim() : ''))
+        : it.obs.trim();
+      if (note) o.notes = note;
+      (porTraspaso[tid] = porTraspaso[tid] || []).push(o);
     });
+    const results = await Promise.all(Object.entries(porTraspaso).map(([tid, its]) =>
+      ApiClient.pickingItems({ traspaso_id: Number(tid), items: its })));
+    return results[0] || { ok: true, data: null };
   }
   async function guardarAvancePicking() {
     setBusy('alistar-save', true);
@@ -1615,29 +1696,38 @@ const App = (() => {
     }
 
     const nd = items.filter((it) => it.nodespacho);
-    const notas = items.filter((it) => it.obs.trim() || it.nodespacho)
+
+    // 1) Guardar la cantidad confirmada y la observación por ítem (un PATCH por traspaso).
+    await savePickingItems();
+
+    // 2) Despachar → LISTO_DESPACHO. Un PUT /dispatch por cada traspaso del grupo,
+    //    con sus propios ítems y sus notas.
+    const traspasos = state.ctx.grupo ? state.ctx.grupo.traspasos : [state.ctx.traspaso];
+    const buildNotes = (its) => its.filter((it) => it.obs.trim() || it.nodespacho)
       .map((it) => `${itemLabel(it)}: ${it.nodespacho ? 'NO DESPACHADO' : ''}${it.obs.trim() && it.obs.trim() !== 'No despachado' ? (it.nodespacho ? ' — ' : '') + it.obs.trim() : ''}`)
       .join(' | ');
-
-    // 1) Guardar la cantidad confirmada y la observación por ítem.
-    //    El traspaso ya está EN_PICKING → PATCH /picking-items (PUT /picking solo sirve
-    //    para la transición SOLICITADO → EN_PICKING y fallaría con ERR_STATE).
-    await savePickingItems();
-    // 2) Despachar → LISTO_DESPACHO (quantity_dispatched = 0 en no despachados).
-    const payload = {
-      traspaso_id: tId(state.ctx.traspaso),
-      notes: notas,
-      items: items.map((it) => {
-        const q = it.nodespacho ? 0 : Math.round((Number(it.despachada) || 0) * 100) / 100;
-        const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: q };
-        const note = it.nodespacho ? ('NO DESPACHADO' + (it.obs.trim() && it.obs.trim() !== 'No despachado' ? ' — ' + it.obs.trim() : '')) : it.obs.trim();
-        if (note) o.notes = note;
-        return o;
-      }),
-    };
-    if (nd.length) toast(`${nd.length} ítem(s) marcados como NO DESPACHADO.`, 'warn');
-    await sendTx('picking_alistar', payload, 'Traspaso LISTO_DESPACHO (en tránsito).');
-    openPicking();
+    try {
+      for (const t of traspasos) {
+        const tid = tId(t);
+        const its = items.filter((it) => (it._tid ?? tid) === tid);
+        if (!its.length) continue;
+        const payload = {
+          traspaso_id: tid,
+          notes: buildNotes(its),
+          items: its.map((it) => {
+            const q = it.nodespacho ? 0 : Math.round((Number(it.despachada) || 0) * 100) / 100;
+            const o = { item_id: it.item_id, batch_id: it.batch_id, quantity_dispatched: q };
+            const note = it.nodespacho ? ('NO DESPACHADO' + (it.obs.trim() && it.obs.trim() !== 'No despachado' ? ' — ' + it.obs.trim() : '')) : it.obs.trim();
+            if (note) o.notes = note;
+            return o;
+          }),
+        };
+        await ApiClient.pickingAlistar(payload);   // PUT /dispatch por traspaso
+      }
+      if (nd.length) toast(`${nd.length} ítem(s) marcados como NO DESPACHADO.`, 'warn');
+      toast(traspasos.length > 1 ? `${traspasos.length} pedidos despachados.` : 'Traspaso LISTO_DESPACHO (en tránsito).', 'ok');
+      openPicking();
+    } catch (e) { logError('picking/despachar', e); toast(e.message || 'No se pudo despachar.', 'err'); }
   }
 
   // D) Transportista: pedidos listos para transportar / en ruta (origen = mi sede).
@@ -1705,46 +1795,64 @@ const App = (() => {
     const ruta = grp.delivery_route || null;
     const card = document.createElement('div'); card.className = 'trip-card';
     const stops = (grp.stops || []).slice().sort((a, b) => Number(a.stop_sequence ?? 0) - Number(b.stop_sequence ?? 0));
+    // Consolidar SOLO de vista: agrupar paradas por tienda destino (varios traspasos → una parada).
+    const byDest = {}; const orderKeys = [];
+    stops.forEach((s) => {
+      const k = String(s.dest_interlocutor_id ?? s.dest_name ?? s.transfer_id);
+      if (!byDest[k]) { byDest[k] = { dest_name: s.dest_name, dest_interlocutor_id: s.dest_interlocutor_id, stop_sequence: s.stop_sequence, entregas: [] }; orderKeys.push(k); }
+      byDest[k].entregas.push(s);
+    });
+    const grupos = orderKeys.map((k) => byDest[k]);
     const titulo = ruta ? (ruta.name || ('Ruta ' + ruta.id)) : 'Entregas puntuales';
     const sub = ruta ? (ruta.status ? String(ruta.status).replace(/_/g, ' ') : '') : 'Asignadas manualmente';
     card.innerHTML = `
       <div class="trip-head">
         <div>
           <div class="trip-name">${titulo}</div>
-          <div class="trip-meta">${sub}${stops.length ? ' · ' + stops.length + ' parada' + (stops.length > 1 ? 's' : '') : ''}</div>
+          <div class="trip-meta">${sub}${grupos.length ? ' · ' + grupos.length + ' parada' + (grupos.length > 1 ? 's' : '') : ''}</div>
         </div>
       </div>
       <div class="trip-stops"></div>`;
     const cont = card.querySelector('.trip-stops');
-    if (!stops.length) { cont.innerHTML = empty('Esta ruta no tiene entregas pendientes.'); return card; }
-    stops.forEach((s, i) => cont.appendChild(stopCard(s, i + 1)));
+    if (!grupos.length) { cont.innerHTML = empty('Esta ruta no tiene entregas pendientes.'); return card; }
+    grupos.forEach((g, i) => cont.appendChild(stopCard(g, i + 1)));
     return card;
   }
-  /* Tarjeta de una parada (tienda) con sus productos y el botón de entregar. */
-  function stopCard(s, orden) {
-    const id = s.transfer_id ?? s.id;
-    const items = s.items || [];
-    const estado = String(s.state || '').toUpperCase();
+  /* Tarjeta de una parada = una TIENDA con una o varias entregas (traspasos) consolidadas.
+     Muestra todos los productos de sus traspasos y un botón que actúa sobre todos. */
+  function stopCard(g, orden) {
+    const entregas = g.entregas || [];
+    // Estado del grupo: si alguno está LISTO_DESPACHO → toca enviar; si alguno EN_RUTA → entregar.
+    const estados = entregas.map((e) => String(e.state || '').toUpperCase());
     const card = document.createElement('div'); card.className = 'stop-card';
-    // Acción según el estado del pedido (v6.13): dos acciones separadas.
     let accionHtml = '';
-    if (estado === 'LISTO_DESPACHO') accionHtml = `<button class="btn-ok stop-act" data-act="salida" data-id="${id}">Marcar como enviado</button>`;
-    else if (estado === 'EN_RUTA')   accionHtml = `<button class="btn-ok stop-act" data-act="entregar" data-id="${id}">Marcar como entregado</button>`;
-    else if (estado === 'PENDIENTE_RECEPCION') accionHtml = '<div class="stop-done">✓ Entregado · pendiente de recepción</div>';
-    else if (estado === 'CERRADO')   accionHtml = '<div class="stop-done">✓ Recibido en tienda</div>';
+    const hayListo = estados.includes('LISTO_DESPACHO');
+    const hayRuta = estados.includes('EN_RUTA');
+    const todosPendRec = estados.length && estados.every((s) => s === 'PENDIENTE_RECEPCION');
+    const todosCerrado = estados.length && estados.every((s) => s === 'CERRADO');
+    if (hayListo) accionHtml = `<button class="btn-ok stop-act" data-act="salida">Marcar como enviado${entregas.length > 1 ? ' (' + entregas.length + ')' : ''}</button>`;
+    else if (hayRuta) accionHtml = `<button class="btn-ok stop-act" data-act="entregar">Marcar como entregado${entregas.length > 1 ? ' (' + entregas.length + ')' : ''}</button>`;
+    else if (todosPendRec) accionHtml = '<div class="stop-done">✓ Entregado · pendiente de recepción</div>';
+    else if (todosCerrado) accionHtml = '<div class="stop-done">✓ Recibido en tienda</div>';
+    const pedidosTxt = entregas.length > 1
+      ? `${entregas.length} pedidos (${entregas.map((e) => '#' + (e.transfer_id ?? e.id)).join(', ')})`
+      : `Traspaso #${entregas[0] ? (entregas[0].transfer_id ?? entregas[0].id) : ''} · ${estados[0] ? estados[0].replace(/_/g, ' ') : ''}`;
+    // Todos los productos de todas las entregas de esta tienda.
+    const filas = [];
+    entregas.forEach((e) => (e.items || []).forEach((it) => filas.push({ it, tid: e.transfer_id ?? e.id })));
     card.innerHTML = `
       <div class="stop-head">
-        <span class="stop-seq">${s.stop_sequence ?? orden}</span>
+        <span class="stop-seq">${g.stop_sequence ?? orden}</span>
         <div class="stop-main">
-          <div class="stop-name">${s.dest_name || s.dest_sede || ('Tienda ' + (s.dest_interlocutor_id ?? ''))}</div>
-          <div class="stop-meta">Traspaso #${id} · ${estado.replace(/_/g, ' ')}</div>
+          <div class="stop-name">${g.dest_name || ('Tienda ' + (g.dest_interlocutor_id ?? ''))}</div>
+          <div class="stop-meta">${pedidosTxt}</div>
         </div>
       </div>
       <div class="stop-items">
-        ${items.length ? items.map((it) => `
+        ${filas.length ? filas.map(({ it, tid }) => `
           <div class="stop-item">
             <div class="stop-item-main">
-              <div class="stop-item-meta">${[it.sku_final_code, it.category_name].filter(Boolean).join(' · ')}</div>
+              <div class="stop-item-meta">${[it.sku_final_code, it.category_name].filter(Boolean).join(' · ')}${entregas.length > 1 ? ' · Pedido #' + tid : ''}</div>
               <div class="stop-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
             </div>
             <div class="stop-item-qty">${fmtQty(it.quantity_dispatched ?? it.quantity_requested ?? 0)}<span>${it.unit_of_measure || it.unit || 'ud'}</span></div>
@@ -1755,14 +1863,17 @@ const App = (() => {
     if (btn) btn.addEventListener('click', async () => {
       btn.disabled = true;
       const act = btn.dataset.act;
+      // Actuar sobre TODOS los traspasos de la tienda que estén en el estado que toca.
+      const objetivo = act === 'salida' ? 'LISTO_DESPACHO' : 'EN_RUTA';
+      const ids = entregas.filter((e) => String(e.state || '').toUpperCase() === objetivo).map((e) => e.transfer_id ?? e.id);
       try {
-        if (act === 'salida') {
-          await ApiClient.traspasoSalida({ traspaso_id: id });
-          toast('Pedido marcado como enviado (en ruta).', 'ok');
-        } else {
-          await ApiClient.transporteEntregar({ traspaso_id: id });
-          toast('Entregado. La tienda ya puede recibirlo.', 'ok');
+        for (const id of ids) {
+          if (act === 'salida') await ApiClient.traspasoSalida({ traspaso_id: id });
+          else await ApiClient.transporteEntregar({ traspaso_id: id });
         }
+        toast(act === 'salida'
+          ? `${ids.length} pedido(s) marcados como enviados.`
+          : `${ids.length} pedido(s) entregados. La tienda ya puede recibirlos.`, 'ok');
         openRutaHoy();
       } catch (e) { logError('mis-rutas/accion', e); toast(e.message || 'No se pudo completar la acción.', 'err'); btn.disabled = false; }
     });
