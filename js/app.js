@@ -1422,6 +1422,23 @@ const App = (() => {
       if (sel) sel.disabled = false;
     }
   }
+  /* Quita la clasificación de un ítem (vuelve a "Sin Clasificar"). */
+  async function desclasificarItem(it, idx) {
+    const sede = state.ctx.origenId;
+    if (!sede) { toast('No se pudo determinar la sede de origen.', 'err'); return; }
+    const sel = el(`ali-area-${idx}`); if (sel) sel.disabled = true;
+    try {
+      await ApiClient.clasificarSku({ sku_id: it.item_id, interlocutor_id: sede });   // sin area_id = quitar
+      it.areaId = null; it.area = null; it.areaSeq = null;
+      toast('Ítem devuelto a "Sin Clasificar".', 'ok');
+      reordenarPorArea();
+      renderAlistar();
+    } catch (e) {
+      logError('picking/desclasificar', e);
+      toast(e.message || 'No se pudo quitar la clasificación.', 'err');
+      if (sel) sel.disabled = false;
+    }
+  }
   /* Reordena los ítems del picking por área tras una clasificación manual. */
   function reordenarPorArea() {
     state.ctx.items.sort((a, b) => {
@@ -1466,7 +1483,7 @@ const App = (() => {
           <span class="ali-meta">${[it.sku_code, it.category_name].filter(Boolean).join(' · ')}</span>
           <b class="ali-name">${itemLabel(it)}</b>
         </span></label>
-        ${it.areaId == null ? `<div class="ali-clasif"><span class="ali-clasif-lbl">Clasificar en área:</span><select id="ali-area-${i}" class="ali-area-sel"><option value="">Elegir área…</option></select></div>` : ''}
+        <div class="ali-clasif${it.areaId != null ? ' ali-clasif-set' : ''}"><span class="ali-clasif-lbl">${it.areaId == null ? 'Clasificar en área:' : 'Área:'}</span><select id="ali-area-${i}" class="ali-area-sel"><option value="">${it.areaId == null ? 'Elegir área…' : 'Sin clasificar'}</option></select></div>
         <div class="oc-card-sub">Solicitada: <b>${fmtQty(sol)}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
         <div class="oc-row2">
           <div><div class="field-label">Despachada</div>
@@ -1498,19 +1515,23 @@ const App = (() => {
           sync();
         });
         if (it.nodespacho) q.disabled = true;
-        // Desplegable de clasificación (solo ítems "Sin Clasificar").
+        // Desplegable de área (en TODAS las tarjetas): permite clasificar o reubicar.
         const areaSel = el(`ali-area-${i}`);
         if (areaSel) {
           fillAreaSelect(areaSel, state.ctx.origenId).then((n) => {
             if (!n) {   // la sede de origen no tiene áreas configuradas
               const cont = areaSel.closest('.ali-clasif');
               if (cont) cont.innerHTML = '<span class="ali-clasif-empty">Esta sede no tiene áreas configuradas. Contacta al administrador.</span>';
+              return;
             }
+            if (it.areaId != null) areaSel.value = String(it.areaId);   // preselecciona el área actual
           });
           areaSel.addEventListener('change', () => {
             const opt = areaSel.selectedOptions[0];
             const val = areaSel.value;
+            if (val === String(it.areaId ?? '')) return;   // sin cambios
             if (val) clasificarItem(it, val, opt ? (opt.dataset.name || opt.textContent) : '', i);
+            else desclasificarItem(it, i);                  // "Sin clasificar" → quitar área
           });
         }
         chk.addEventListener('change', () => {

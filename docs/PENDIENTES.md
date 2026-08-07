@@ -115,3 +115,14 @@ con el issuer de cada subdominio, y código de error exacto de un usuario afecta
   pero no como tarjeta si no están en FAV. Aceptable; revisar si molesta en uso real.
 - **Pantalla `entregas` → rol Chofer Logístico:** asignarla desde el Gestor de Permisos.
 - **[1005] Ágora TPV:** no iniciado.
+
+
+## 🟡 Orden de áreas en RECEPCIÓN DE MERCANCÍA y UBICACIÓN POR QR — PENDIENTE
+El orden de recorrido por área (`area_pick_sequence`), que ya se usa en el picking,
+debe aplicarse también a los módulos **Recepción de Mercancía** y **Ubicación por QR**,
+donde se acomoda la mercancía recién llegada en sus ubicaciones. Objetivo: que el
+operario ubique la mercancía siguiendo el mismo orden físico del almacén que en el picking.
+Pendiente de diseñar cómo se integra el área/su orden en esos dos flujos (hoy Ubicación por
+QR trabaja por ubicación/estantería, no por área). Levantar REQ a [1001] si se necesita que
+esos endpoints expongan `area_id`/`area_name`/`area_pick_sequence` por ítem/ubicación.
+
