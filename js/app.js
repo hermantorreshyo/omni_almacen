@@ -1963,6 +1963,8 @@ const App = (() => {
       const r = await ApiClient.traspasoDetalle(tId(t));
       const d = r?.data ?? {}; header = d.transfer || t; items = d.items || d.details || [];
     } catch (e) { logError('cierre/detalle', e); items = await transferItems(t); }
+    // Orden alfabético por nombre del producto → fácil de leer/verificar para quien recibe.
+    items = items.slice().sort((a, b) => String(itemLabel(a)).localeCompare(String(itemLabel(b)), 'es', { sensitivity: 'base' }));
     state.ctx = {
       traspaso: t, header,
       items: items.map((it) => ({ ...it, recibida: Number(it.quantity_dispatched ?? it.quantity_requested ?? 0), obs: '', done: false })),
@@ -1971,11 +1973,20 @@ const App = (() => {
     el('cierre-title').textContent = `Recepción Traspaso #${tId(t)}`;
     el('cierre-sub').textContent = `Desde: ${header.origin_sede || intNameById(originIntOf(header))}${transferDate(header) ? ' · ' + fmtDT(transferDate(header)) : ''}`;
     const grid = el('cierre-grid'); grid.innerHTML = '';
+    let lastInicial = null;
     state.ctx.items.forEach((it, i) => {
       const ped = Number(it.quantity_requested ?? 0);
       const env = Number(it.quantity_dispatched ?? it.quantity_requested ?? 0);
       const faltante = env < ped;
       const pickObs = it.picking_notes || '';
+      // Banda con la inicial del nombre (como una agenda), para ubicarse en listas largas.
+      const inicial = (String(itemLabel(it)).trim()[0] || '#').toUpperCase();
+      if (inicial !== lastInicial) {
+        lastInicial = inicial;
+        const band = document.createElement('div'); band.className = 'cie-inicial'; band.dataset.inicial = inicial;
+        band.textContent = inicial;
+        grid.appendChild(band);
+      }
       it.recibida = env;            // por defecto se recibe lo despachado
       it.disp = 'recibido';         // recibido | no_recibido | devuelto
       const card = document.createElement('div'); card.className = 'ali-card'; card.id = `cie-card-${i}`;
@@ -2018,6 +2029,24 @@ const App = (() => {
     });
     el('cie-all').checked = false;
     updateCieProgress();
+    // Buscador rápido: filtra por nombre y oculta las bandas de inicial vacías.
+    const buscar = el('cie-buscar');
+    if (buscar) {
+      buscar.value = '';
+      buscar.oninput = () => {
+        const q = buscar.value.trim().toLowerCase();
+        state.ctx.items.forEach((it, i) => {
+          const card = el(`cie-card-${i}`);
+          if (card) card.style.display = (!q || String(itemLabel(it)).toLowerCase().includes(q)) ? '' : 'none';
+        });
+        // Ocultar bandas de inicial que se quedaron sin tarjetas visibles.
+        el('cierre-grid').querySelectorAll('.cie-inicial').forEach((band) => {
+          let vis = false, n = band.nextElementSibling;
+          while (n && !n.classList.contains('cie-inicial')) { if (n.style.display !== 'none') { vis = true; break; } n = n.nextElementSibling; }
+          band.style.display = vis ? '' : 'none';
+        });
+      };
+    }
   }
   function updateCieProgress() {
     const total = state.ctx.items.length;
