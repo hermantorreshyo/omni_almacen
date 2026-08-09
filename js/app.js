@@ -847,10 +847,19 @@ const App = (() => {
       state.ctx.draftId = tId(draft);
       const det = await ApiClient.traspasoDetalle(state.ctx.draftId);
       const items = det?.data?.items || det?.data?.details || [];
+      state.ctx.draftMeta = state.ctx.draftMeta || {};
       items.forEach((it) => {
         const iid = String(it.item_id);
         state.ctx.qty[iid] = Number(it.quantity_requested ?? 0);
         if (it.id != null) state.ctx.rows[iid] = it.id;   // itemRowId real
+        // Guardar metadatos del ítem para mostrar el NOMBRE en el resumen aunque el
+        // SKU no esté en el catálogo cargado (mismo patrón que en mermas).
+        state.ctx.draftMeta[iid] = {
+          id: it.item_id,
+          name: it.item_name || it.name || it.sku_name || null,
+          sku_final_code: it.sku_final_code || it.item_code || '',
+          unit_of_measure: it.unit_of_measure || it.unit || 'ud',
+        };
       });
       if (det?.data?.transfer?.notes) el('sol-notes').value = det.data.transfer.notes;
       if (items.length) {
@@ -1195,10 +1204,10 @@ const App = (() => {
     const ids = Object.keys(state.ctx.qty || {});
     wrap.innerHTML = ids.length ? '' : '<div class="sol-sum-row"><span class="sol-sum-n">Sin productos seleccionados.</span></div>';
     ids.forEach((id) => {
-      const s = byId[id] || {};
+      const s = byId[id] || (state.ctx.draftMeta && state.ctx.draftMeta[id]) || {};
       const unit = skuUnit(s);
       const r = document.createElement('div'); r.className = 'sol-sum-row';
-      r.innerHTML = `<span class="sol-sum-n">${s.name || ('SKU ' + id)}<span class="sol-sum-u">${s.sku_final_code || ''}</span></span>
+      r.innerHTML = `<span class="sol-sum-n">${s.name || s.sku_final_code || ('SKU ' + id)}<span class="sol-sum-u">${s.sku_final_code || ''}</span></span>
         <span class="sol-sum-q">${state.ctx.qty[id]} ${unit}</span>`;
       wrap.appendChild(r);
     });
