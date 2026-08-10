@@ -1698,9 +1698,19 @@ const App = (() => {
         obs.addEventListener('input', () => { it.obs = obs.value; it.confirmed = true; scheduleAliSave(); });
         nd.addEventListener('change', () => {
           it.nodespacho = nd.checked;
+          it.confirmed = true;                              // el cambio es una acción del usuario → se guarda
           card.classList.toggle('ali-nd-on', nd.checked);
-          if (nd.checked) { it.despachada = 0; q.value = '0'; q.disabled = true; if (!obs.value.trim()) { obs.value = 'No despachado'; it.obs = 'No despachado'; } }
-          else { q.disabled = false; }
+          if (nd.checked) {
+            // Marcar como NO DESPACHADO: fija 0, bloquea el campo y precarga la nota.
+            it.despachada = 0; q.value = '0'; q.disabled = true;
+            if (!obs.value.trim()) { obs.value = 'No despachado'; it.obs = 'No despachado'; }
+          } else {
+            // Revertir: rehabilita el campo, limpia la nota automática y sugiere lo solicitado.
+            q.disabled = false;
+            if (obs.value.trim() === 'No despachado') { obs.value = ''; it.obs = ''; }
+            it.despachada = sol; q.value = String(sol);
+            q.focus(); q.select();                          // listo para teclear la cantidad real
+          }
           sync();
         });
         if (it.nodespacho) q.disabled = true;
