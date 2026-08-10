@@ -432,6 +432,97 @@ const App = (() => {
     c.appendChild(det);
     return c;
   }
+  /* ── Maestro de Pedidos (solo SuperAdmin): ver todos los pedidos no cerrados ── */
+  const MAESTRO_ESTADOS = ['BORRADOR', 'SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO', 'EN_RUTA', 'PENDIENTE_RECEPCION', 'CERRADO'];
+  async function openMaestro() {
+    view('view-maestro');
+    const list = el('mae-list'); list.innerHTML = skeleton();
+    await ensureCatalogs(['interlocutors', 'locations']);
+    // Todos los pedidos NO cerrados: se piden por estado (excepto CERRADO).
+    const estados = MAESTRO_ESTADOS.filter((s) => s !== 'CERRADO');
+    try {
+      const results = await Promise.all(estados.map((st) =>
+        ApiClient.traspasos(st).then((r) => rowsOf(r.data)).catch(() => [])));
+      let rows = [].concat(...results);
+      // Dedup por id y orden por fecha desc.
+      const seen = {}; rows = rows.filter((t) => { const k = tId(t); if (seen[k]) return false; seen[k] = 1; return true; });
+      rows.sort((a, b) => String(transferDate(b) || '').localeCompare(String(transferDate(a) || '')));
+      state._maestroRows = rows;
+      renderMaestro(rows);
+    } catch (e) { logError('maestro/list', e); list.innerHTML = apiErrorBox([e]); }
+    const b = el('mae-buscar');
+    if (b) { b.value = ''; b.oninput = () => renderMaestro(state._maestroRows || []); }
+  }
+  function renderMaestro(rows) {
+    const list = el('mae-list'); if (!list) return;
+    const q = (el('mae-buscar') && el('mae-buscar').value.trim().toLowerCase()) || '';
+    const filtered = rows.filter((t) => {
+      if (!q) return true;
+      const nombre = (t.dest_sede || intNameById(destIntOf(t)) || '').toLowerCase();
+      return nombre.includes(q) || String(tId(t)).includes(q);
+    });
+    if (!filtered.length) { list.innerHTML = empty('No hay pedidos sin cerrar.'); return; }
+    list.innerHTML = '';
+    filtered.forEach((t) => {
+      const st = String(tState(t)).toUpperCase();
+      const c = document.createElement('div'); c.className = 'rowcard col';
+      c.innerHTML = `<div class="rowcard-top"><b>${t.dest_sede || intNameById(destIntOf(t))} · #${tId(t)}</b>
+          <span class="chip chip-amb">${st.replace(/_/g, ' ')}</span></div>
+        <small class="tp-sub">${intNameById(originIntOf(t))} → ${t.dest_sede || intNameById(destIntOf(t))}${transferDate(t) ? ' · ' + fmtDT(transferDate(t)) : ''}</small>`;
+      const det = document.createElement('div'); det.className = 'dash-det hidden';
+      c.style.cursor = 'pointer';
+      c.addEventListener('click', async (ev) => {
+        if (ev.target.closest('.mae-actions')) return;   // no togglear al usar el selector
+        det.classList.toggle('hidden');
+        if (!det.dataset.loaded) {
+          det.innerHTML = '<div class="skel"></div>';
+          det.dataset.loaded = '1';
+          det.innerHTML = '';
+          // Detalle de ítems
+          const items = await transferItems(t);
+          items.forEach((it) => {
+            const row = document.createElement('div'); row.className = 'td-item';
+            row.innerHTML = `<div class="td-item-main">
+                <div class="td-item-meta">${it.sku_final_code || ''}</div>
+                <div class="td-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
+              </div>
+              <div class="td-item-qty">${fmtQty(it.quantity_requested ?? it.quantity ?? 0)}<span>${it.unit_of_measure || 'ud'}</span></div>`;
+            det.appendChild(row);
+          });
+          // Acción: cambiar estado (depende del endpoint admin de 1001).
+          const act = document.createElement('div'); act.className = 'mae-actions';
+          const sel = document.createElement('select'); sel.className = 'ali-area-sel';
+          MAESTRO_ESTADOS.forEach((es) => {
+            const o = document.createElement('option'); o.value = es; o.textContent = es.replace(/_/g, ' ');
+            if (es === st) o.selected = true; sel.appendChild(o);
+          });
+          const btn = document.createElement('button'); btn.className = 'btn-cargar'; btn.style.marginTop = '0'; btn.textContent = 'Cambiar estado';
+          btn.addEventListener('click', () => cambiarEstadoPedido(t, sel.value));
+          act.appendChild(sel); act.appendChild(btn);
+          det.appendChild(act);
+        }
+      });
+      list.appendChild(c); list.appendChild(det);
+    });
+  }
+  async function cambiarEstadoPedido(t, nuevo) {
+    if (String(nuevo).toUpperCase() === String(tState(t)).toUpperCase()) { toast('El pedido ya está en ese estado.', 'warn'); return; }
+    const motivo = prompt(`Cambiar el pedido #${tId(t)} a "${nuevo}".\nMotivo (para auditoría):`, '');
+    if (motivo === null) return;   // cancelado
+    try {
+      await ApiClient.cambiarEstadoAdmin({ traspaso_id: tId(t), state: nuevo, reason: motivo });
+      toast(`Pedido #${tId(t)} → ${nuevo.replace(/_/g, ' ')}.`, 'ok');
+      openMaestro();
+    } catch (e) {
+      logError('maestro/estado', e);
+      // Si el endpoint admin aún no existe en el core, avisamos con claridad.
+      if (e && (e.code === 'ERR_NOT_FOUND' || e.status === 404)) {
+        toast('El cambio de estado administrativo aún no está disponible en el API CORE.', 'warn');
+      } else {
+        toast(e.message || 'No se pudo cambiar el estado.', 'err');
+      }
+    }
+  }
   async function openRutaSelector() {
     view('view-ruta-sel');
     const list = el('ruta-sel-list'); list.innerHTML = skeleton();
@@ -485,6 +576,8 @@ const App = (() => {
     if (mh) mh.classList.toggle('hidden', !v.includes('merma'));   // mismo permiso que registrar merma
     const rh = el('drawer-ruta-hist');
     if (rh) rh.classList.toggle('hidden', !(isSuperAdmin() || v.includes('entregas') || v.includes('transporte')));
+    const mae = el('drawer-maestro');
+    if (mae) mae.classList.toggle('hidden', !isSuperAdmin());   // solo SuperAdministrador
   }
   function openDrawer() { el('app-drawer').classList.remove('hidden'); }
   function closeDrawer() { el('app-drawer').classList.add('hidden'); }
@@ -1289,7 +1382,7 @@ const App = (() => {
 
   // Picking: solo solicitudes cuyo ORIGEN es mi interlocutor. Incluye SOLICITADO
   // (nuevas) y EN_PICKING (asignadas a mí, reabribles hasta cambiar de estado).
-  const PICKING_STATES = ['SOLICITADO', 'EN_PICKING'];
+  const PICKING_STATES = ['SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO'];
   /* Consulta traspasos y NO oculta los errores del API (403 por permisos, etc.). */
   async function fetchTransfers(states) {
     const errs = [];
@@ -1331,11 +1424,17 @@ const App = (() => {
     list.innerHTML = '';
     orden.forEach((g) => {
       const varios = g.traspasos.length > 1;
-      const algunoEnPicking = g.traspasos.some((t) => String(tState(t)).toUpperCase() === 'EN_PICKING');
+      const sts = g.traspasos.map((t) => String(tState(t)).toUpperCase());
+      const todosListos = sts.length && sts.every((s) => s === 'LISTO_DESPACHO');
+      const algunoEnPicking = sts.includes('EN_PICKING');
       const c = document.createElement('button'); c.className = 'rowcard';
-      const badge = algunoEnPicking
-        ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
-        : '<span class="chip">SOLICITADO</span>';
+      const badge = todosListos
+        ? '<span class="chip chip-ok">LISTO · esperando ruta</span>'
+        : algunoEnPicking
+          ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
+          : sts.includes('LISTO_DESPACHO')
+            ? '<span class="chip chip-amb">PARCIAL</span>'
+            : '<span class="chip">SOLICITADO</span>';
       const nombre = g.traspasos[0].dest_sede || intNameById(g.dest);
       const sub = varios
         ? `${g.traspasos.length} pedidos${g.dia ? ' · ' + fmtDate(g.dia) : ''}`
@@ -1347,9 +1446,11 @@ const App = (() => {
   }
   /* Abre el picking consolidado de un grupo (varios traspasos de la misma tienda+fecha). */
   async function openAlistarGroup(g) {
-    // Inicia (SOLICITADO→EN_PICKING) los traspasos que aún estén en SOLICITADO.
+    // Inicia (SOLICITADO→EN_PICKING) solo los que están en SOLICITADO. Los EN_PICKING y
+    // los LISTO_DESPACHO (ya despachados, aún no cargados a ruta) se abren para ajustar.
     for (const t of g.traspasos) {
-      if (String(tState(t)).toUpperCase() !== 'EN_PICKING') {
+      const st = String(tState(t)).toUpperCase();
+      if (st === 'SOLICITADO') {
         try { await ApiClient.pickingIniciar({ traspaso_id: tId(t) }); }
         catch (e) { if (e && e.code !== 'ERR_STATE') logError('picking/iniciar', e); }
       }
@@ -1839,8 +1940,8 @@ const App = (() => {
     const hayRuta = estados.includes('EN_RUTA');
     const todosPendRec = estados.length && estados.every((s) => s === 'PENDIENTE_RECEPCION');
     const todosCerrado = estados.length && estados.every((s) => s === 'CERRADO');
-    if (hayListo) accionHtml = `<button class="btn-ok stop-act" data-act="salida">Marcar como enviado${entregas.length > 1 ? ' (' + entregas.length + ')' : ''}</button>`;
-    else if (hayRuta) accionHtml = `<button class="btn-ok stop-act" data-act="entregar">Marcar como entregado${entregas.length > 1 ? ' (' + entregas.length + ')' : ''}</button>`;
+    if (hayListo) accionHtml = `<button class="btn-cargar stop-act" data-act="salida">Cargar pedido a ruta${entregas.length > 1 ? ' (' + entregas.length + ')' : ''}</button>`;
+    else if (hayRuta) accionHtml = `<button class="btn-entregar stop-act" data-act="entregar">Marcar como entregado${entregas.length > 1 ? ' (' + entregas.length + ')' : ''}</button>`;
     else if (todosPendRec) accionHtml = '<div class="stop-done">✓ Entregado · pendiente de recepción</div>';
     else if (todosCerrado) accionHtml = '<div class="stop-done">✓ Recibido en tienda</div>';
     const pedidosTxt = entregas.length > 1
@@ -2682,6 +2783,7 @@ const App = (() => {
     el('drawer-dashboard').addEventListener('click', () => { closeDrawer(); openDashboard(); });
     el('drawer-merma-hist').addEventListener('click', () => { closeDrawer(); openMermaHist(); });
     el('drawer-ruta-hist').addEventListener('click', () => { closeDrawer(); openRutaHist(); });
+    el('drawer-maestro').addEventListener('click', () => { closeDrawer(); openMaestro(); });
     el('rh-load').addEventListener('click', () => loadRutaHist());
     el('drawer-password').addEventListener('click', () => { closeDrawer(); openPassword(); });
     ['pw-cur', 'pw-new', 'pw-conf'].forEach((id) => el(id).addEventListener('input', updatePwRules));

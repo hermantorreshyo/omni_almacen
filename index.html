@@ -224,6 +224,11 @@
     .stop-item-qty { flex: none; font-size: 1rem; font-weight: 800; color: #642a72; display: flex; align-items: baseline; gap: 3px; }
     .stop-item-qty span { font-size: .68rem; font-weight: 600; color: #9ca3af; }
     .stop-deliver { width: 100%; margin-top: 4px; }
+    .btn-cargar { width: 100%; margin-top: 4px; padding: 12px; border: 0; border-radius: 12px; font-weight: 800; font-size: .95rem; color: #fff; background: #2563eb; cursor: pointer; }
+    .btn-cargar:active { background: #1d4ed8; }
+    .btn-entregar { width: 100%; margin-top: 4px; padding: 12px; border: 0; border-radius: 12px; font-weight: 800; font-size: .95rem; color: #fff; background: #0a7d54; cursor: pointer; }
+    .btn-entregar:active { background: #086844; }
+    .btn-cargar:disabled, .btn-entregar:disabled { opacity: .6; }
     .stop-done { text-align: center; color: #0a7d54; font-weight: 700; font-size: .88rem; padding: 6px 0; }
     .mon-card .mon-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: .82rem; }
     .mon-k { color: #9ca3af; }
@@ -266,6 +271,8 @@
     .ali-clasif-empty { font-size: .8rem; color: #b45309; }
     .ali-clasif-set { background: #fbfbfd; border-style: solid; border-color: #ece8f0; }
     .ali-ped { color: #642a72; font-weight: 800; }
+    .mae-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #efeaf1; }
+    .mae-actions .ali-area-sel { flex: 1; }
     .cie-inicial { position: sticky; top: 54px; z-index: 3; font-size: .8rem; font-weight: 800; color: #642a72; background: #f3edf5; border-radius: 8px; padding: 4px 12px; margin: 8px 0 2px; }
     .cie-buscar { width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 12px; font-size: .95rem; margin-bottom: 12px; box-sizing: border-box; }
     .cie-buscar:focus { outline: none; border-color: #642a72; box-shadow: 0 0 0 3px rgba(100,42,114,.12); }
@@ -436,6 +443,7 @@
       <button class="drawer-item" id="drawer-dashboard">Panel de traspasos</button>
       <button class="drawer-item" id="drawer-merma-hist">Historial de mermas</button>
       <button class="drawer-item" id="drawer-ruta-hist">Historial de rutas</button>
+      <button class="drawer-item" id="drawer-maestro">Maestro de pedidos</button>
       <button class="drawer-item" id="drawer-permisos">Gestor de permisos</button>
       <button class="drawer-item" id="drawer-password">Cambiar contraseña</button>
       <button class="drawer-item drawer-logout" id="drawer-logout">Salir</button>
@@ -657,6 +665,14 @@
       <div id="rh-list"></div>
     </section>
 
+    <section id="view-maestro" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 class="sec-title">Maestro de pedidos</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Todos los pedidos sin cerrar. Consulta el detalle y, si un pedido queda atorado, ajusta su estado.</p>
+      <input id="mae-buscar" class="cie-buscar" type="search" placeholder="Buscar por tienda o #pedido…" />
+      <div id="mae-list"></div>
+    </section>
+
     <section id="view-ruta-sel" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Elegir ruta de hoy</h1>
@@ -818,10 +834,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260712z"></script>
-  <script src="js/metrology.js?v=20260712z"></script>
-  <script src="js/scanner.js?v=20260712z"></script>
-  <script src="js/outbox-service.js?v=20260712z"></script>
-  <script src="js/app.js?v=20260712z"></script>
+  <script src="js/api-client.js?v=20260713a"></script>
+  <script src="js/metrology.js?v=20260713a"></script>
+  <script src="js/scanner.js?v=20260713a"></script>
+  <script src="js/outbox-service.js?v=20260713a"></script>
+  <script src="js/app.js?v=20260713a"></script>
 </body>
 </html>
