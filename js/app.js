@@ -433,13 +433,16 @@ const App = (() => {
     return c;
   }
   /* ── Maestro de Pedidos (solo SuperAdmin): ver todos los pedidos no cerrados ── */
-  const MAESTRO_ESTADOS = ['BORRADOR', 'SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO', 'EN_RUTA', 'PENDIENTE_RECEPCION', 'CERRADO'];
+  const MAESTRO_ESTADOS = ['SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO', 'EN_RUTA', 'PENDIENTE_RECEPCION', 'CERRADO', 'CANCELADO'];
+  // Estados que se listan como "no cerrados" (para poblar el maestro). BORRADOR no es
+  // destino manual, pero sí puede existir y mostrarse.
+  const MAESTRO_LISTAR = ['BORRADOR', 'SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO', 'EN_RUTA', 'PENDIENTE_RECEPCION'];
   async function openMaestro() {
     view('view-maestro');
     const list = el('mae-list'); list.innerHTML = skeleton();
     await ensureCatalogs(['interlocutors', 'locations']);
-    // Todos los pedidos NO cerrados: se piden por estado (excepto CERRADO).
-    const estados = MAESTRO_ESTADOS.filter((s) => s !== 'CERRADO');
+    // Todos los pedidos NO cerrados: se piden por estado (BORRADOR..PENDIENTE_RECEPCION).
+    const estados = MAESTRO_LISTAR;
     try {
       const results = await Promise.all(estados.map((st) =>
         ApiClient.traspasos(st).then((r) => rowsOf(r.data)).catch(() => [])));
@@ -492,7 +495,10 @@ const App = (() => {
           // Acción: cambiar estado (depende del endpoint admin de 1001).
           const act = document.createElement('div'); act.className = 'mae-actions';
           const sel = document.createElement('select'); sel.className = 'ali-area-sel';
-          MAESTRO_ESTADOS.forEach((es) => {
+          // Si el estado actual no es un destino válido (ej. BORRADOR), lo mostramos igual
+          // como opción seleccionada para dar contexto, pero no se puede reenviar a él.
+          const opciones = MAESTRO_ESTADOS.includes(st) ? MAESTRO_ESTADOS : [st, ...MAESTRO_ESTADOS];
+          opciones.forEach((es) => {
             const o = document.createElement('option'); o.value = es; o.textContent = es.replace(/_/g, ' ');
             if (es === st) o.selected = true; sel.appendChild(o);
           });
@@ -506,18 +512,28 @@ const App = (() => {
     });
   }
   async function cambiarEstadoPedido(t, nuevo) {
-    if (String(nuevo).toUpperCase() === String(tState(t)).toUpperCase()) { toast('El pedido ya está en ese estado.', 'warn'); return; }
-    const motivo = prompt(`Cambiar el pedido #${tId(t)} a "${nuevo}".\nMotivo (para auditoría):`, '');
-    if (motivo === null) return;   // cancelado
+    const actual = String(tState(t)).toUpperCase();
+    if (String(nuevo).toUpperCase() === actual) { toast('El pedido ya está en ese estado.', 'warn'); return; }
+    // Motivo obligatorio (para no perder trazabilidad; el core lo registra en transfer_log).
+    let motivo = '';
+    while (!motivo.trim()) {
+      motivo = prompt(`Cambiar el pedido #${tId(t)} de "${actual.replace(/_/g, ' ')}" a "${nuevo.replace(/_/g, ' ')}".\n\nMotivo (obligatorio, para auditoría):`, '');
+      if (motivo === null) return;   // cancelado
+      if (!motivo.trim()) toast('El motivo es obligatorio.', 'warn');
+    }
     try {
-      await ApiClient.cambiarEstadoAdmin({ traspaso_id: tId(t), state: nuevo, reason: motivo });
+      const r = await ApiClient.cambiarEstadoAdmin({ traspaso_id: tId(t), state: nuevo, reason: motivo.trim() });
+      // Aviso de inventario si el salto cruza /route o /close (el core no toca stock solo).
+      const warn = r?.data?.stock_warning;
+      if (warn) alert('⚠️ ' + warn);
       toast(`Pedido #${tId(t)} → ${nuevo.replace(/_/g, ' ')}.`, 'ok');
       openMaestro();
     } catch (e) {
       logError('maestro/estado', e);
-      // Si el endpoint admin aún no existe en el core, avisamos con claridad.
       if (e && (e.code === 'ERR_NOT_FOUND' || e.status === 404)) {
-        toast('El cambio de estado administrativo aún no está disponible en el API CORE.', 'warn');
+        toast('El cambio de estado administrativo no está disponible en el API CORE.', 'warn');
+      } else if (e && e.status === 409) {
+        toast(e.message || 'No se puede cambiar: el pedido está eliminado o marcado como prueba.', 'warn');
       } else {
         toast(e.message || 'No se pudo cambiar el estado.', 'err');
       }
@@ -1752,7 +1768,11 @@ const App = (() => {
     clearTimeout(state.ctx._aliTimer);
     setAliStatus('saving');
     state.ctx._aliTimer = setTimeout(() => {
-      savePickingItems().then(() => setAliStatus('saved')).catch(() => setAliStatus('error'));
+      savePickingItems().then(() => setAliStatus('saved')).catch((e) => {
+        setAliStatus('error');
+        // En EN_RUTA el core rechaza (ya cargado a ruta); en LISTO_DESPACHO ya se permite.
+        if (e && e.code === 'ERR_STATE') toast('Este pedido ya salió a ruta y no admite más ajustes.', 'warn');
+      });
     }, 700);
   }
   function setAliStatus(s) {
@@ -1777,8 +1797,10 @@ const App = (() => {
   /* Guarda el avance del picking (PATCH /picking-items, no cambia de estado).
      Permite alistar en varias visitas: el picker sale y vuelve sin perder lo hecho. */
   async function savePickingItems() {
-    // Solo se guardan los ítems confirmados o no despachados. Se agrupan por traspaso
-    // de origen (_tid) → un PATCH por traspaso, para soportar picking consolidado.
+    // Solo se guardan los ítems confirmados o no despachados, agrupados por traspaso.
+    // v6.30: PATCH /picking-items acepta EN_PICKING y LISTO_DESPACHO; el core mapea al
+    // campo correcto (quantity_picked o quantity_dispatched) según el estado. En EN_RUTA
+    // el core lo rechaza (correcto: ya cargado a ruta).
     const items = state.ctx.items.filter((it) => it.confirmed || it.nodespacho);
     if (!items.length) return { ok: true, data: null };
     const porTraspaso = {};

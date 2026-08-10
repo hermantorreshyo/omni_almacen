@@ -3,8 +3,7 @@
 **Subsistema solicitante:** [1003] Gestión de Almacenes y Mermas
 **Endpoint(s) afectado(s):** nuevo, administrativo, sobre `inventory/transfers`
 **Prioridad:** Media-Alta — necesario para destrabar pedidos atorados en producción
-**Estado:** PENDIENTE de implementación en [1001]. [1003] construye la vista de solo
-lectura mientras tanto; la acción de cambio de estado se enchufa al responder.
+**Estado:** ✅ ATENDIDA (v6.29) — PUT /inventory/transfers/{id}/admin-state (solo superadmin). Cambia solo la cabecera; devuelve stock_warning cuando el salto cruza /route o /close (se muestra al SuperAdmin). Estados válidos: SOLICITADO, EN_PICKING, LISTO_DESPACHO, EN_RUTA, PENDIENTE_RECEPCION, CERRADO, CANCELADO (BORRADOR excluido). Auditoría en transfer_log con prefijo [ADMIN]. [1003] exige motivo obligatorio.
 
 ---
 
