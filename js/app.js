@@ -1770,8 +1770,13 @@ const App = (() => {
     state.ctx._aliTimer = setTimeout(() => {
       savePickingItems().then(() => setAliStatus('saved')).catch((e) => {
         setAliStatus('error');
-        // En EN_RUTA el core rechaza (ya cargado a ruta); en LISTO_DESPACHO ya se permite.
-        if (e && e.code === 'ERR_STATE') toast('Este pedido ya salió a ruta y no admite más ajustes.', 'warn');
+        if (e && e.code === 'ERR_STATE') {
+          // v6.30: el core debe aceptar PATCH /picking-items en LISTO_DESPACHO.
+          // Si sigue exigiendo EN_PICKING, la v6.30 no está desplegada en este servidor.
+          const st = String(tState(state.ctx.traspaso) || '').toUpperCase();
+          if (st === 'EN_RUTA') toast('Este pedido ya salió a ruta y no admite más ajustes.', 'warn');
+          else toast('El servidor rechazó el ajuste (requiere EN_PICKING). Verifica que el API CORE tenga la v6.30 desplegada.', 'err');
+        }
       });
     }, 700);
   }
