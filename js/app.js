@@ -1496,8 +1496,17 @@ const App = (() => {
   }
   /* Enriquece un ítem de picking con su área y el traspaso de origen. */
   function enrichPickItem(it, t) {
-    const yaGuardado = it.quantity_picked != null;
-    const picked = Number(it.quantity_picked ?? it.quantity_requested ?? 0);
+    const st = String(tState(t)).toUpperCase();
+    // En LISTO_DESPACHO la cantidad vigente es quantity_dispatched (la ajustada);
+    // en EN_PICKING es quantity_picked. Se lee el campo correcto según el estado.
+    const savedVal = st === 'LISTO_DESPACHO'
+      ? (it.quantity_dispatched ?? it.quantity_picked)
+      : (it.quantity_picked ?? it.quantity_dispatched);
+    const yaGuardado = savedVal != null;
+    const picked = Number(savedVal ?? it.quantity_requested ?? 0);
+    // "No despachado" solo si el valor guardado es realmente 0 y la nota lo indica,
+    // no por defecto. Evita que un ítem ya ajustado a positivo reaparezca en rojo.
+    const notaND = /NO DESPACHADO/i.test(String(it.picking_notes || ''));
     return {
       ...it,
       _tid: tId(t),                                     // traspaso al que pertenece
@@ -1508,7 +1517,7 @@ const App = (() => {
       sku_code: it.sku_final_code || '',
       despachada: picked,
       obs: it.picking_notes || '',
-      nodespacho: picked <= 0 && yaGuardado,
+      nodespacho: yaGuardado && picked <= 0 && notaND,
       confirmed: yaGuardado,
       done: yaGuardado,
     };
@@ -1770,13 +1779,7 @@ const App = (() => {
     state.ctx._aliTimer = setTimeout(() => {
       savePickingItems().then(() => setAliStatus('saved')).catch((e) => {
         setAliStatus('error');
-        if (e && e.code === 'ERR_STATE') {
-          // v6.30: el core debe aceptar PATCH /picking-items en LISTO_DESPACHO.
-          // Si sigue exigiendo EN_PICKING, la v6.30 no está desplegada en este servidor.
-          const st = String(tState(state.ctx.traspaso) || '').toUpperCase();
-          if (st === 'EN_RUTA') toast('Este pedido ya salió a ruta y no admite más ajustes.', 'warn');
-          else toast('El servidor rechazó el ajuste (requiere EN_PICKING). Verifica que el API CORE tenga la v6.30 desplegada.', 'err');
-        }
+        if (e && e.code === 'ERR_STATE') toast('Este pedido ya salió a ruta y no admite más ajustes.', 'warn');
       });
     }, 700);
   }
@@ -1845,19 +1848,25 @@ const App = (() => {
     const nd = items.filter((it) => it.nodespacho);
 
     // 1) Guardar la cantidad confirmada y la observación por ítem (un PATCH por traspaso).
+    //    Para traspasos ya en LISTO_DESPACHO, esto ES el ajuste (v6.30: PATCH mapea a
+    //    quantity_dispatched) y no hay que despacharlos de nuevo.
     await savePickingItems();
 
-    // 2) Despachar → LISTO_DESPACHO. Un PUT /dispatch por cada traspaso del grupo,
-    //    con sus propios ítems y sus notas.
+    // 2) Despachar (PUT /dispatch) SOLO los traspasos aún en EN_PICKING → LISTO_DESPACHO.
+    //    Los que ya están en LISTO_DESPACHO no se re-despachan (dispatch exige EN_PICKING
+    //    y fallaría con ERR_STATE): su ajuste ya quedó guardado por el PATCH de arriba.
     const traspasos = state.ctx.grupo ? state.ctx.grupo.traspasos : [state.ctx.traspaso];
     const buildNotes = (its) => its.filter((it) => it.obs.trim() || it.nodespacho)
       .map((it) => `${itemLabel(it)}: ${it.nodespacho ? 'NO DESPACHADO' : ''}${it.obs.trim() && it.obs.trim() !== 'No despachado' ? (it.nodespacho ? ' — ' : '') + it.obs.trim() : ''}`)
       .join(' | ');
     try {
+      let despachados = 0, ajustados = 0;
       for (const t of traspasos) {
         const tid = tId(t);
         const its = items.filter((it) => (it._tid ?? tid) === tid);
         if (!its.length) continue;
+        const st = String(tState(t)).toUpperCase();
+        if (st === 'LISTO_DESPACHO') { ajustados++; continue; }   // ya despachado: ajuste vía PATCH, no re-dispatch
         const payload = {
           traspaso_id: tid,
           notes: buildNotes(its),
@@ -1869,10 +1878,15 @@ const App = (() => {
             return o;
           }),
         };
-        await ApiClient.pickingAlistar(payload);   // PUT /dispatch por traspaso
+        await ApiClient.pickingAlistar(payload);   // PUT /dispatch (EN_PICKING → LISTO_DESPACHO)
+        despachados++;
       }
       if (nd.length) toast(`${nd.length} ítem(s) marcados como NO DESPACHADO.`, 'warn');
-      toast(traspasos.length > 1 ? `${traspasos.length} pedidos despachados.` : 'Traspaso LISTO_DESPACHO (en tránsito).', 'ok');
+      const msg = despachados && ajustados
+        ? `${despachados} despachado(s) y ${ajustados} ajustado(s).`
+        : ajustados ? (ajustados > 1 ? `${ajustados} pedidos ajustados.` : 'Ajuste guardado.')
+        : (despachados > 1 ? `${despachados} pedidos despachados.` : 'Traspaso LISTO_DESPACHO (en tránsito).');
+      toast(msg, 'ok');
       openPicking();
     } catch (e) { logError('picking/despachar', e); toast(e.message || 'No se pudo despachar.', 'err'); }
   }
