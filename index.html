@@ -273,6 +273,25 @@
     .ali-ped { color: #642a72; font-weight: 800; }
     .ali-backbar { position: sticky; top: 0; z-index: 20; margin: 0 -16px 12px; padding: 8px 16px; background: rgba(255,255,255,.96); backdrop-filter: blur(6px); border-bottom: 1px solid #eee; }
     .ali-backbar .btn-ghost { margin: 0; }
+    .ali-filtro { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
+    .ali-fbtn { flex: 0 0 auto; padding: 7px 12px; border: 1px solid #d9d5df; border-radius: 999px; background: #fff; font-size: .82rem; font-weight: 700; color: #6b7280; cursor: pointer; white-space: nowrap; }
+    .ali-fbtn-on { background: #642a72; border-color: #642a72; color: #fff; }
+    .dash-filtros { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .dash-f { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 100px; }
+    .dash-f span { font-size: .72rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .03em; }
+    .dash-f input, .dash-f select { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 9px; font-size: .88rem; background: #fff; }
+    .dash-det-box { background: #f6f2f8; border: 1px solid #e2d9e8; border-left: 3px solid #642a72; border-radius: 10px; margin: 2px 0 10px; padding: 8px 10px; }
+    .dd-head { display: flex; align-items: center; font-size: .7rem; font-weight: 800; color: #7c5a88; text-transform: uppercase; letter-spacing: .03em; padding: 2px 0 6px; border-bottom: 1px solid #e2d9e8; margin-bottom: 4px; }
+    .dd-head > span:first-child { flex: 1; }
+    .dd-qcol { width: 74px; text-align: right; flex: 0 0 auto; }
+    .dd-item { display: flex; align-items: center; padding: 6px 0; border-bottom: 1px solid #ece5f0; }
+    .dd-item:last-child { border-bottom: 0; }
+    .dd-item-main { flex: 1; min-width: 0; }
+    .dd-item-meta { font-size: .72rem; color: #8b7d95; }
+    .dd-item-name { font-size: .9rem; font-weight: 700; color: #2b2233; }
+    .dd-ped { font-weight: 700; color: #1f2430; }
+    .dd-desp { font-weight: 800; color: #0a7d54; }
+    .dd-qcol span { font-size: .68rem; font-weight: 600; color: #9ca3af; }
     .mae-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #efeaf1; }
     .mae-actions .ali-area-sel { flex: 1; }
     .cie-inicial { position: sticky; top: 54px; z-index: 3; font-size: .8rem; font-weight: 800; color: #642a72; background: #f3edf5; border-radius: 8px; padding: 4px 12px; margin: 8px 0 2px; }
@@ -534,6 +553,11 @@
     <section id="view-dashboard" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Panel de traspasos</h1>
+      <div class="dash-filtros">
+        <label class="dash-f"><span>Fecha</span><input type="date" id="dash-f-fecha" /></label>
+        <label class="dash-f"><span>Estado</span><select id="dash-f-estado"><option value="">Todos</option></select></label>
+        <label class="dash-f"><span>Tienda</span><select id="dash-f-tienda"><option value="">Todas</option></select></label>
+      </div>
       <div id="dash-kpis" class="kpi-grid"></div>
       <div id="dash-states" class="perm-card" style="margin-top:14px;"></div>
       <div id="dash-list" style="margin-top:6px;"></div>
@@ -647,6 +671,12 @@
       <div class="ali-bar">
         <label class="ali-check ali-all-lbl"><input type="checkbox" id="ali-all" /> Marcar todos</label>
         <span id="ali-progress" class="ali-progress">0/0 alistados</span>
+      </div>
+      <div id="ali-filtro" class="ali-filtro">
+        <button class="ali-fbtn ali-fbtn-on" data-f="todos">Todos</button>
+        <button class="ali-fbtn" data-f="pend">Pendientes</button>
+        <button class="ali-fbtn" data-f="ok">Gestionados</button>
+        <button class="ali-fbtn" data-f="nd">No despachados</button>
       </div>
       <div id="alistar-grid" style="display:flex;flex-direction:column;gap:12px;"></div>
       <div style="height:12px;"></div>
@@ -836,10 +866,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260713i"></script>
-  <script src="js/metrology.js?v=20260713i"></script>
-  <script src="js/scanner.js?v=20260713i"></script>
-  <script src="js/outbox-service.js?v=20260713i"></script>
-  <script src="js/app.js?v=20260713i"></script>
+  <script src="js/api-client.js?v=20260713j"></script>
+  <script src="js/metrology.js?v=20260713j"></script>
+  <script src="js/scanner.js?v=20260713j"></script>
+  <script src="js/outbox-service.js?v=20260713j"></script>
+  <script src="js/app.js?v=20260713j"></script>
 </body>
 </html>

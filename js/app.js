@@ -1829,6 +1829,36 @@ const App = (() => {
     });
     el('ali-all').checked = false;
     updateAliProgress();
+    // Filtro de estado de ítems (Todos/Pendientes/Gestionados/No despachados).
+    state.ctx._aliFiltro = 'todos';
+    el('ali-filtro').querySelectorAll('.ali-fbtn').forEach((b) => {
+      b.onclick = () => {
+        el('ali-filtro').querySelectorAll('.ali-fbtn').forEach((x) => x.classList.remove('ali-fbtn-on'));
+        b.classList.add('ali-fbtn-on');
+        state.ctx._aliFiltro = b.dataset.f;
+        aplicarAliFiltro();
+      };
+    });
+    aplicarAliFiltro();
+  }
+  /* Muestra/oculta tarjetas y bandas de área según el filtro de estado seleccionado. */
+  function aplicarAliFiltro() {
+    const f = state.ctx._aliFiltro || 'todos';
+    const grid = el('alistar-grid'); if (!grid) return;
+    state.ctx.items.forEach((it, i) => {
+      const card = el(`ali-card-${i}`); if (!card) return;
+      let vis = true;
+      if (f === 'ok') vis = it.confirmed && !it.nodespacho;       // gestionados (verde)
+      else if (f === 'nd') vis = it.nodespacho;                    // no despachados (rojo)
+      else if (f === 'pend') vis = !it.confirmed && !it.nodespacho; // sin gestionar
+      card.style.display = vis ? '' : 'none';
+    });
+    // Ocultar bandas de área que quedaron sin tarjetas visibles.
+    grid.querySelectorAll('.ali-cat').forEach((band) => {
+      let vis = false, n = band.nextElementSibling;
+      while (n && !n.classList.contains('ali-cat')) { if (n.style.display !== 'none') { vis = true; break; } n = n.nextElementSibling; }
+      band.style.display = vis ? '' : 'none';
+    });
   }
   /* Autoguardado del alistamiento (PATCH /picking-items) — NO cambia de estado.
      El pedido pasa a LISTO_DESPACHO solo con el botón Confirmar. */
@@ -1852,6 +1882,8 @@ const App = (() => {
     const done = state.ctx.items.filter((it) => it.done).length;
     el('ali-progress').textContent = `${done}/${total} alistados`;
     el('alistar-confirm').disabled = total === 0 || done < total;
+    // Si hay un filtro de estado activo distinto de "Todos", reorganizar en vivo.
+    if (state.ctx._aliFiltro && state.ctx._aliFiltro !== 'todos') aplicarAliFiltro();
   }
   function toggleAliAll(checked) {
     state.ctx.items.forEach((it, i) => {
@@ -2329,14 +2361,60 @@ const App = (() => {
     el('dash-states').innerHTML = '';
     el('dash-list').innerHTML = '';
     try {
-      await ensureCatalogs(['interlocutors', 'locations']);   // para resolver nombres de sede
-      const r = await ApiClient.traspasos();        // sin filtro: todos los del interlocutor
-      const rows = rowsOf(r.data);
-      renderDashboard(rows);
+      await ensureCatalogs(['interlocutors', 'locations']);
+      // Todos los traspasos no cerrados + cerrados, por estado, excluyendo eliminados/prueba.
+      const results = await Promise.all(DASH_STATES.map((st) =>
+        ApiClient.traspasos(st).then((r) => rowsOf(r.data)).catch(() => [])));
+      let rows = [].concat(...results);
+      // Dedup por id.
+      const seen = {}; rows = rows.filter((t) => { const k = tId(t); if (seen[k]) return false; seen[k] = 1; return true; });
+      // Excluir registros eliminados o de prueba.
+      rows = rows.filter((t) => { const rs = String(t.record_status || 'active').toLowerCase(); return rs !== 'deleted' && rs !== 'test'; });
+      state._dashRows = rows;
+      poblarDashFiltros(rows);
+      // Filtro por defecto: día presente, todos los estados, todas las tiendas.
+      if (!el('dash-f-fecha').value) el('dash-f-fecha').value = new Date().toISOString().slice(0, 10);
+      aplicarDashFiltros();
     } catch (e) {
       logError('dashboard/load', e);
+      state._dashRows = [];
       renderDashboard([]);
     }
+  }
+  /* Puebla los desplegables de estado y tienda con los valores presentes. */
+  function poblarDashFiltros(rows) {
+    const selE = el('dash-f-estado'), selT = el('dash-f-tienda');
+    if (selE && selE.options.length <= 1) {
+      DASH_STATES.forEach((s) => { const o = document.createElement('option'); o.value = s; o.textContent = s.replace(/_/g, ' '); selE.appendChild(o); });
+    }
+    if (selT) {
+      const tiendas = {};
+      rows.forEach((t) => { const id = destIntOf(t); if (id != null) tiendas[id] = t.dest_sede || intNameById(id); });
+      selT.querySelectorAll('option:not([value=""])').forEach((o) => o.remove());
+      Object.entries(tiendas).sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+        .forEach(([id, nombre]) => { const o = document.createElement('option'); o.value = id; o.textContent = nombre; selT.appendChild(o); });
+    }
+    // Cablear cambios (una sola vez).
+    if (!state._dashFiltrosCableados) {
+      ['dash-f-fecha', 'dash-f-estado', 'dash-f-tienda'].forEach((id) => {
+        const e = el(id); if (e) e.addEventListener('change', aplicarDashFiltros);
+      });
+      state._dashFiltrosCableados = true;
+    }
+  }
+  /* Aplica los tres filtros y repinta. */
+  function aplicarDashFiltros() {
+    const rows = state._dashRows || [];
+    const fFecha = el('dash-f-fecha').value;          // YYYY-MM-DD
+    const fEstado = el('dash-f-estado').value;
+    const fTienda = el('dash-f-tienda').value;
+    const filtered = rows.filter((t) => {
+      if (fEstado && String(tState(t)).toUpperCase() !== fEstado) return false;
+      if (fTienda && String(destIntOf(t)) !== String(fTienda)) return false;
+      if (fFecha) { const d = String(transferDate(t) || '').slice(0, 10); if (d !== fFecha) return false; }
+      return true;
+    });
+    renderDashboard(filtered);
   }
   function renderDashboard(rows) {
     const total   = rows.length;
@@ -2366,9 +2444,9 @@ const App = (() => {
 
     // Listado reciente (hasta 25)
     const list = el('dash-list');
-    if (!total) { list.innerHTML = empty('Sin traspasos en tu tienda.'); return; }
+    if (!total) { list.innerHTML = empty('No hay traspasos con estos filtros.'); return; }
     list.innerHTML = `<div class="perm-card-h" style="margin:14px 0 8px;">Detalle</div>`;
-    rows.slice(0, 25).forEach((t) => {
+    rows.forEach((t) => {
       const n = itemCount(t);
       const solicitante = solicitanteName(t);                  // el destino es quien solicitó
       const origen = intNameById(originIntOf(t));
@@ -2380,23 +2458,29 @@ const App = (() => {
           <small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small>
         </div>
         <span class="chip">${tState(t).replace(/_/g, ' ')}</span>`;
-      const det = document.createElement('div'); det.className = 'dash-det hidden';
+      const det = document.createElement('div'); det.className = 'dash-det dash-det-box hidden';
       c.addEventListener('click', async () => {
         det.classList.toggle('hidden');
         if (!det.dataset.loaded) {
           det.innerHTML = '<div class="skel"></div>';
           const items = await transferItems(t);
           det.dataset.loaded = '1';
-          det.innerHTML = items.length ? '' : '<div class="td-empty">Sin ítems.</div>';
+          det.innerHTML = items.length
+            ? '<div class="dd-head"><span>Producto</span><span class="dd-qcol">Pedida</span><span class="dd-qcol">Despachada</span></div>'
+            : '<div class="td-empty">Sin ítems.</div>';
           items.forEach((it) => {
-            const row = document.createElement('div'); row.className = 'td-item';
+            const row = document.createElement('div'); row.className = 'dd-item';
             const meta = [it.sku_final_code, it.category_name].filter(Boolean).join(' · ');
+            const ped = fmtQty(it.quantity_requested ?? it.quantity ?? 0);
+            const desp = it.quantity_dispatched != null ? fmtQty(it.quantity_dispatched) : '—';
+            const u = it.unit_of_measure || it.unit || 'ud';
             row.innerHTML = `
-              <div class="td-item-main">
-                ${meta ? `<div class="td-item-meta">${meta}</div>` : ''}
-                <div class="td-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
+              <div class="dd-item-main">
+                ${meta ? `<div class="dd-item-meta">${meta}</div>` : ''}
+                <div class="dd-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
               </div>
-              <div class="td-item-qty">${fmtQty(it.quantity_requested ?? it.quantity ?? 0)}<span>${it.unit || 'ud'}</span></div>`;
+              <div class="dd-qcol dd-ped">${ped} <span>${u}</span></div>
+              <div class="dd-qcol dd-desp">${desp}${desp !== '—' ? ` <span>${u}</span>` : ''}</div>`;
             det.appendChild(row);
           });
         }

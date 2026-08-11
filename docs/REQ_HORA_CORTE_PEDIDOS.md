@@ -36,12 +36,12 @@ Necesitamos del core:
    necesitamos el contrato real. Propuesta:
    ```
    GET /api/v1/config?key=pedidos.cutoff_hour
-   → { "key": "pedidos.cutoff_hour", "value": 14 }
+   → { "key": "pedidos.cutoff_hour", "value": 12 }
    ```
    O, si prefieren un bloque de configuración:
    ```
    GET /api/v1/config/pedidos
-   → { "cutoff_hour": 14, "timezone": "Europe/Madrid" }
+   → { "cutoff_hour": 12, "timezone": "Europe/Madrid" }
    ```
    Indíquennos la forma definitiva (nombre del endpoint, clave y tipo del valor).
 
