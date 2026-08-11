@@ -86,7 +86,8 @@ $UP = [
     'transfer_solicitar'   => '/inventory/transfers/%d/solicitar',    // PUT enviar (BORRADOR→SOLICITADO)
     'transfer_draft_del'   => '/inventory/transfers/%d',              // DELETE descartar borrador                 // POST crear / GET ?state=
     'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
-    'transfer_admin_state' => '/inventory/transfers/%d/admin-state',  // PUT cambio de estado admin (pendiente 1001)
+    'transfer_admin_state' => '/inventory/transfers/%d/admin-state',  // PUT cambio de estado admin
+    'sys_config'           => '/config',                              // GET config del sistema (pendiente 1001) (pendiente 1001)
     'transfer_picking'     => '/inventory/transfers/%d/picking',      // PUT
     'transfer_picking_items' => '/inventory/transfers/%d/picking-items', // PATCH (EN_PICKING, no cambia estado)
     'transfer_dispatch'    => '/inventory/transfers/%d/dispatch',     // PUT
@@ -358,6 +359,13 @@ switch ($action) {
         relay(client()->request('PUT', sprintf($UP['sku_area'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
     }
 
+    case 'sys_config': {           // GET /config?key= — parámetro del sistema (pendiente 1001)
+        requireAuth();
+        $qs = [];
+        if (!empty($_GET['key'])) $qs['key'] = (string) $_GET['key'];
+        $url = $UP['sys_config'] . ($qs ? ('?' . http_build_query($qs)) : '');
+        relay(client()->request('GET', $url, null, true));
+    }
     case 'transfer_admin_state': {  // PUT /inventory/transfers/{id}/admin-state (SuperAdmin)
         requireAuth();
         $in = bodyJson();

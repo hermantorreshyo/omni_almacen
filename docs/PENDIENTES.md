@@ -126,3 +126,19 @@ Pendiente de diseñar cómo se integra el área/su orden en esos dos flujos (hoy
 QR trabaja por ubicación/estantería, no por área). Levantar REQ a [1001] si se necesita que
 esos endpoints expongan `area_id`/`area_name`/`area_pick_sequence` por ítem/ubicación.
 
+
+## 🟡 Ventana de corte de pedidos — fase B (corte real) PENDIENTE en 1001
+Implementado en [1003] (opción A, solo vista): los pedidos se agrupan en picking por
+**tienda + ventana de corte** (franja de HH:00 a HH:00 del día siguiente, hora de Madrid),
+usando la **fecha de creación** del pedido. Hora de corte por defecto 12:00.
+
+Pendiente de 1001:
+1. **Hora de corte configurable** en la config del sistema (REQ_HORA_CORTE_PEDIDOS.md).
+   [1003] ya la consume de forma tolerante vía `GET /config?key=pedidos.cutoff_hour`;
+   falta que el core la exponga. Definir si es global o por sede, y confirmar zona horaria.
+2. **Corte "duro" (fase B, a decidir con negocio):** que el sistema aplique el corte a
+   nivel de datos — marcar cada pedido con su ventana/fecha de despacho, cerrar la franja
+   a la hora exacta, o mover automáticamente los pedidos al siguiente corte. Hoy [1003]
+   solo agrupa visualmente; si se prioriza el corte real, levantar REQ para el campo en el
+   traspaso y la lógica asociada.
+

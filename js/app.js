@@ -201,8 +201,19 @@ const App = (() => {
     el('hdr-rol').textContent  = state.rol || '—';
     el('app-header').classList.remove('hidden');
     await loadParams();
+    await loadCutoffConfig();   // hora de corte configurable (si el core la expone)
     await loadScreens();
     renderHub();
+  }
+  /* Hora de corte de pedidos desde la config del sistema (pendiente en 1001).
+     Si el endpoint aún no existe, se mantiene el valor por defecto (12:00) sin ruido. */
+  async function loadCutoffConfig() {
+    try {
+      const r = await ApiClient.sysConfig('pedidos.cutoff_hour');
+      const h = r?.data?.value ?? r?.data?.cutoff_hour ?? r?.data;
+      const n = parseInt(h, 10);
+      if (!isNaN(n) && n >= 0 && n <= 23) state._cutoffHour = n;
+    } catch (_) { /* endpoint aún no disponible: se usa CUTOFF_HOUR por defecto */ }
   }
 
   /* Parámetros de implantación (GET /system/params). Adaptan validaciones. */
@@ -1396,6 +1407,46 @@ const App = (() => {
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
 
+  /* ── Ventana de corte de pedidos ──────────────────────────────────────
+     Los pedidos se agrupan por franja de corte: de HH:00 de un día a HH:00 del
+     siguiente (hora de Madrid). La hora de corte es configurable en el core (pendiente);
+     por defecto 12:00. Un pedido creado a las 15:00 del 10-ago pertenece a la ventana
+     10-ago 12:00 → 11-ago 12:00, que se alista el 11-ago al corte. */
+  const CUTOFF_HOUR = 12;   // por defecto; se sobrescribirá con la config del core cuando exista
+  function cutoffHour() { return Number(state._cutoffHour ?? CUTOFF_HOUR); }
+  /* Fecha del pedido en hora de Madrid (partes año/mes/día/hora). */
+  function madridParts(s) {
+    if (!s) return null;
+    const d = new Date(String(s).replace(' ', 'T'));
+    if (isNaN(d)) return null;
+    // Reinterpreta el instante en Europe/Madrid.
+    const f = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(d).reduce((a, p) => (a[p.type] = p.value, a), {});
+    return { y: +f.year, m: +f.month, d: +f.day, h: +(f.hour === '24' ? 0 : f.hour) };
+  }
+  /* Clave y etiqueta de la ventana de corte a la que pertenece un pedido. */
+  function cutoffWindow(fechaCreacion) {
+    const p = madridParts(fechaCreacion);
+    if (!p) return { key: 'sin-fecha', label: 'Sin fecha' };
+    const H = cutoffHour();
+    // El inicio de la ventana es el corte del propio día si es ≥ H; si no, el corte del día anterior.
+    const base = new Date(Date.UTC(p.y, p.m - 1, p.d));
+    if (p.h < H) base.setUTCDate(base.getUTCDate() - 1);   // antes del corte → ventana que abrió ayer
+    const ini = new Date(base);                            // inicio (día a las H:00)
+    const fin = new Date(base); fin.setUTCDate(fin.getUTCDate() + 1);   // fin (día siguiente a las H:00)
+    const p2 = (n) => String(n).padStart(2, '0');
+    const dd = (x) => `${p2(x.getUTCDate())}/${p2(x.getUTCMonth() + 1)}`;
+    const key = `${ini.getUTCFullYear()}${p2(ini.getUTCMonth() + 1)}${p2(ini.getUTCDate())}`;
+    const label = `Corte ${dd(fin)} · ${p2(H)}:00`;       // se alista en el corte del día de cierre
+    return { key, label, ini, fin };
+  }
+  /* Fecha de CREACIÓN del pedido (para la ventana). Cae a la fecha disponible del traspaso. */
+  function creationDate(t) {
+    return t.created_at || t.fecha_creacion || t.createdAt || transferDate(t) || '';
+  }
+
   // Picking: solo solicitudes cuyo ORIGEN es mi interlocutor. Incluye SOLICITADO
   // (nuevas) y EN_PICKING (asignadas a mí, reabribles hasta cambiar de estado).
   const PICKING_STATES = ['SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO'];
@@ -1428,15 +1479,16 @@ const App = (() => {
     const mine = Number(state.interlocutor);
     const mias = rows.filter((t) => { const o = originIntOf(t); return o == null || o === mine; });
     if (!mias.length) { list.innerHTML = empty('No hay solicitudes para tu almacén.'); return; }
-    // Consolidación SOLO de vista: agrupar por tienda destino + fecha (día).
+    // Consolidación SOLO de vista: agrupar por tienda destino + VENTANA DE CORTE.
+    // La ventana se decide por la fecha de creación del pedido (hora de Madrid).
     const groups = {};
     mias.forEach((t) => {
       const dest = destIntOf(t);
-      const dia = String(transferDate(t) || '').slice(0, 10);
-      const key = `${dest}|${dia}`;
-      (groups[key] = groups[key] || { dest, dia, traspasos: [] }).traspasos.push(t);
+      const win = cutoffWindow(creationDate(t));
+      const key = `${dest}|${win.key}`;
+      (groups[key] = groups[key] || { dest, win, traspasos: [] }).traspasos.push(t);
     });
-    const orden = Object.values(groups).sort((a, b) => String(b.dia).localeCompare(String(a.dia)));
+    const orden = Object.values(groups).sort((a, b) => String(b.win.key).localeCompare(String(a.win.key)));
     list.innerHTML = '';
     orden.forEach((g) => {
       const varios = g.traspasos.length > 1;
@@ -1453,8 +1505,8 @@ const App = (() => {
             : '<span class="chip">SOLICITADO</span>';
       const nombre = g.traspasos[0].dest_sede || intNameById(g.dest);
       const sub = varios
-        ? `${g.traspasos.length} pedidos${g.dia ? ' · ' + fmtDate(g.dia) : ''}`
-        : `Traspaso #${tId(g.traspasos[0])}${g.dia ? ' · ' + fmtDate(g.dia) : ''}`;
+        ? `${g.traspasos.length} pedidos · ${g.win.label}`
+        : `Traspaso #${tId(g.traspasos[0])} · ${g.win.label}`;
       c.innerHTML = `<div><b>${nombre}</b><small>${sub}</small></div>${badge}`;
       c.addEventListener('click', () => openAlistarGroup(g).catch(() => {}));
       list.appendChild(c);
@@ -1666,7 +1718,7 @@ const App = (() => {
     const nombreDest = g ? (g.traspasos[0].dest_sede || intNameById(g.dest)) : intNameById(destIntOf(h));
     if (state.ctx.multi) {
       el('alistar-title').textContent = `Alistar · ${nombreDest}`;
-      el('alistar-sub').textContent = `${g.traspasos.length} pedidos (${g.traspasos.map((t) => '#' + tId(t)).join(', ')})${g.dia ? ' · ' + fmtDate(g.dia) : ''}`;
+      el('alistar-sub').textContent = `${g.traspasos.length} pedidos (${g.traspasos.map((t) => '#' + tId(t)).join(', ')})${g.win ? ' · ' + g.win.label : ''}`;
     } else {
       el('alistar-title').textContent = `Alistar Traspaso #${tId(state.ctx.traspaso)}`;
       el('alistar-sub').textContent = `Solicita: ${nombreDest}${transferDate(h) ? ' · ' + fmtDT(transferDate(h)) : ''}`;
