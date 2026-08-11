@@ -1674,7 +1674,7 @@ const App = (() => {
       it.areaSeq = null;   // el orden fino lo define la sede; basta reubicar por área
       toast(`Clasificado en "${areaName || 'área'}".`, 'ok');
       reordenarPorArea();
-      renderAlistar();
+      renderAlistarKeepScroll();
     } catch (e) {
       logError('picking/clasificar', e);
       toast(e.message || 'No se pudo clasificar el ítem.', 'err');
@@ -1691,7 +1691,7 @@ const App = (() => {
       it.areaId = null; it.area = null; it.areaSeq = null;
       toast('Ítem devuelto a "Sin Clasificar".', 'ok');
       reordenarPorArea();
-      renderAlistar();
+      renderAlistarKeepScroll();
     } catch (e) {
       logError('picking/desclasificar', e);
       toast(e.message || 'No se pudo quitar la clasificación.', 'err');
@@ -1710,6 +1710,13 @@ const App = (() => {
       return String(a.area || '').localeCompare(String(b.area || '')) ||
              String(itemLabel(a)).localeCompare(String(itemLabel(b)));
     });
+  }
+  /* Repinta el alistado conservando la posición de scroll (para clasificar sin saltar arriba). */
+  function renderAlistarKeepScroll() {
+    const y = window.scrollY;
+    renderAlistar();
+    // renderAlistar() -> view() hace scrollTo(0,0); restauramos la posición tras el repintado.
+    requestAnimationFrame(() => window.scrollTo(0, y));
   }
   function renderAlistar() {
     view('view-alistar');
