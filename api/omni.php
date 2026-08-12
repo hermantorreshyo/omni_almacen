@@ -83,6 +83,7 @@ $UP = [
     'transfer_draft'       => '/inventory/transfers/draft',           // POST crear/continuar borrador
     'transfer_items_add'   => '/inventory/transfers/%d/items',        // POST añadir ítems
     'transfer_item_row'    => '/inventory/transfers/%d/items/%d',     // PATCH/DELETE fila de ítem
+    'transfer_substitute'  => '/inventory/transfers/%d/items/%d/substitute', // PUT sustituir producto (v6.32)
     'transfer_solicitar'   => '/inventory/transfers/%d/solicitar',    // PUT enviar (BORRADOR→SOLICITADO)
     'transfer_draft_del'   => '/inventory/transfers/%d',              // DELETE descartar borrador                 // POST crear / GET ?state=
     'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
@@ -368,6 +369,18 @@ switch ($action) {
         $body = [];
         if (!empty($in['reason'])) $body['reason'] = (string) $in['reason'];
         relay(client()->request('PUT', sprintf($UP['transfer_cancel'], $id),
+            json_encode($body, JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'transfer_substitute': {  // PUT /inventory/transfers/{id}/items/{rowId}/substitute (v6.32)
+        requireAuth();
+        $in = bodyJson();
+        $id = (int) ($in['traspaso_id'] ?? 0);
+        $row = (int) ($in['item_row_id'] ?? 0);
+        $newId = (int) ($in['new_item_id'] ?? 0);
+        if ($id <= 0 || $row <= 0 || $newId <= 0) fail('ERR_PARAM', 'traspaso_id, item_row_id y new_item_id son obligatorios.', 422);
+        $body = ['new_item_id' => $newId, 'new_item_type' => (string) ($in['new_item_type'] ?? 'sku')];
+        if (!empty($in['reason'])) $body['reason'] = (string) $in['reason'];
+        relay(client()->request('PUT', sprintf($UP['transfer_substitute'], $id, $row),
             json_encode($body, JSON_UNESCAPED_UNICODE), true));
     }
     case 'sys_config': {           // GET /config?key= — parámetro del sistema (pendiente 1001)

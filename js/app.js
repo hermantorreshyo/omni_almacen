@@ -1745,6 +1745,61 @@ const App = (() => {
     });
   }
   /* Repinta el alistado conservando la posición de scroll (para clasificar sin saltar arriba). */
+  /* ── Sustitución de producto en el picking (v6.32) ── */
+  function abrirSustituir(it, idx) {
+    if (it.id == null) { toast('Este ítem no admite sustitución.', 'warn'); return; }
+    state._subCtx = { it, idx };
+    el('sub-actual').innerHTML = `<span class="sub-actual-lbl">Producto actual</span><b>${itemLabel(it)}</b>${it.sku_code ? `<small>${it.sku_code}</small>` : ''}`;
+    el('sub-q').value = '';
+    el('sub-res').innerHTML = '<div class="sub-hint">Escribe para buscar el producto sustituto.</div>';
+    el('sub-drawer').classList.remove('hidden');
+    setTimeout(() => el('sub-q').focus(), 50);
+  }
+  function cerrarSustituir() { el('sub-drawer').classList.add('hidden'); state._subCtx = null; }
+  let _subTimer = null;
+  async function buscarSustituto() {
+    const q = el('sub-q').value.trim();
+    if (q.length < 2) { el('sub-res').innerHTML = '<div class="sub-hint">Escribe al menos 2 caracteres.</div>'; return; }
+    el('sub-res').innerHTML = skeleton();
+    try {
+      const rows = await fetchAllSkus({ status: 'active', limit: 40, q });
+      const actualId = state._subCtx ? state._subCtx.it.item_id : null;
+      const list = rows.filter((s) => Number(s.id) !== Number(actualId));   // no ofrecer el mismo
+      if (!list.length) { el('sub-res').innerHTML = empty('Sin coincidencias.'); return; }
+      el('sub-res').innerHTML = '';
+      list.forEach((s) => {
+        const b = document.createElement('button'); b.className = 'sub-item';
+        b.innerHTML = `<div><b>${s.name || s.sku_name || ('SKU ' + s.id)}</b><small>${[s.sku_final_code, s.category_name].filter(Boolean).join(' · ')}</small></div><span class="sub-pick">Elegir</span>`;
+        b.addEventListener('click', () => confirmarSustituto(s));
+        el('sub-res').appendChild(b);
+      });
+    } catch (e) { logError('picking/buscar-sustituto', e); el('sub-res').innerHTML = apiErrorBox([e]); }
+  }
+  async function confirmarSustituto(sku) {
+    const ctx = state._subCtx; if (!ctx) return;
+    const nombre = sku.name || sku.sku_name || ('SKU ' + sku.id);
+    const motivo = prompt(`Sustituir "${itemLabel(ctx.it)}" por "${nombre}".\n\nMotivo (opcional):`, '');
+    if (motivo === null) return;
+    try {
+      await ApiClient.sustituirProducto({
+        traspaso_id: tId(state.ctx.traspaso),
+        item_row_id: ctx.it.id,             // id de la FILA (no item_id)
+        new_item_id: sku.id,
+        new_item_type: 'sku',
+        reason: motivo.trim(),
+      });
+      cerrarSustituir();
+      toast('Producto sustituido. Vuelve a marcar la cantidad.', 'ok');
+      // Recargar el alistado: las cantidades del ítem se reiniciaron en el core.
+      if (state.ctx.grupo) await openAlistarGroup(state.ctx.grupo);
+      else await openAlistarGroup({ dest: destIntOf(state.ctx.traspaso), win: cutoffWindow(creationDate(state.ctx.traspaso)), traspasos: [state.ctx.traspaso] });
+    } catch (e) {
+      logError('picking/sustituir', e);
+      if (e && e.code === 'ERR_STATE') toast('Este pedido ya salió a ruta; no se puede sustituir.', 'warn');
+      else if (e && e.status === 409) toast(e.message || 'No se puede sustituir: el producto no está activo o ya existe en el pedido.', 'warn');
+      else toast(e.message || 'No se pudo sustituir el producto.', 'err');
+    }
+  }
   function renderAlistarKeepScroll() {
     const y = window.scrollY;
     renderAlistar();
@@ -1787,7 +1842,7 @@ const App = (() => {
       card.innerHTML = `
         <label class="ali-check"><input type="checkbox" id="ali-chk-${i}" ${it.done ? 'checked' : ''} /><span class="ali-head">
           <span class="ali-meta">${[it.sku_code, it.category_name].filter(Boolean).join(' · ')}${state.ctx.multi ? ` · <b class="ali-ped">Pedido #${it._tid}</b>` : ''}</span>
-          <b class="ali-name">${itemLabel(it)}</b>
+          <b class="ali-name">${itemLabel(it)} <button class="ali-sub-btn" id="ali-sub-${i}" title="Sustituir producto" aria-label="Sustituir producto">✏️</button></b>
         </span></label>
         <div class="ali-clasif${it.areaId != null ? ' ali-clasif-set' : ''}"><span class="ali-clasif-lbl">${it.areaId == null ? 'Clasificar en área:' : 'Área:'}</span><select id="ali-area-${i}" class="ali-area-sel"><option value="">${it.areaId == null ? 'Elegir área…' : 'Sin clasificar'}</option></select></div>
         <div class="oc-card-sub">Solicitada: <b>${fmtQty(sol)}</b>${it.batch_reference ? ` · Lote ${it.batch_reference}` : ''}</div>
@@ -1833,6 +1888,8 @@ const App = (() => {
         if (it.nodespacho) q.disabled = true;
         // Desplegable de área (en TODAS las tarjetas): permite clasificar o reubicar.
         const areaSel = el(`ali-area-${i}`);
+        const subBtn = el(`ali-sub-${i}`);
+        if (subBtn) subBtn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); abrirSustituir(it, i); });
         if (areaSel) {
           fillAreaSelect(areaSel, state.ctx.origenId).then((n) => {
             if (!n) {   // la sede de origen no tiene áreas configuradas
@@ -3044,6 +3101,9 @@ const App = (() => {
     el('drawer-merma-hist').addEventListener('click', () => { closeDrawer(); openMermaHist(); });
     el('drawer-ruta-hist').addEventListener('click', () => { closeDrawer(); openRutaHist(); });
     el('drawer-maestro').addEventListener('click', () => { closeDrawer(); openMaestro(); });
+    el('sub-close').addEventListener('click', cerrarSustituir);
+    el('sub-drawer').addEventListener('click', (e) => { if (e.target === el('sub-drawer')) cerrarSustituir(); });
+    el('sub-q').addEventListener('input', () => { clearTimeout(_subTimer); _subTimer = setTimeout(buscarSustituto, 350); });
     el('rh-load').addEventListener('click', () => loadRutaHist());
     el('drawer-password').addEventListener('click', () => { closeDrawer(); openPassword(); });
     ['pw-cur', 'pw-new', 'pw-conf'].forEach((id) => el(id).addEventListener('input', updatePwRules));

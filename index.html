@@ -302,6 +302,20 @@
     .td-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
     .td-cancel { border: 1px solid #f0c9c9; background: #fdf1f1; color: #c0392b; border-radius: 8px; padding: 5px 9px; font-size: .95rem; line-height: 1; cursor: pointer; }
     .td-cancel:active { background: #f8dcdc; }
+    .ali-sub-btn { background: none; border: 0; cursor: pointer; font-size: .85rem; padding: 0 2px; opacity: .55; vertical-align: middle; }
+    .ali-sub-btn:hover, .ali-sub-btn:active { opacity: 1; }
+    .sub-drawer { position: fixed; inset: 0; z-index: 60; background: rgba(20,16,26,.45); display: flex; align-items: flex-end; }
+    .sub-sheet { background: #fff; width: 100%; max-height: 82vh; border-radius: 18px 18px 0 0; padding: 16px; display: flex; flex-direction: column; box-sizing: border-box; }
+    .sub-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 1.05rem; }
+    .sub-actual { background: #f6f2f8; border: 1px solid #e2d9e8; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 1px; }
+    .sub-actual-lbl { font-size: .68rem; font-weight: 800; color: #7c5a88; text-transform: uppercase; letter-spacing: .03em; }
+    .sub-actual small { color: #8b7d95; font-size: .78rem; }
+    .sub-res { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    .sub-hint { color: #9ca3af; font-size: .85rem; padding: 12px 4px; text-align: center; }
+    .sub-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border: 1px solid #eee; border-radius: 10px; background: #fff; cursor: pointer; }
+    .sub-item:active { background: #f6f2f8; }
+    .sub-item small { display: block; color: #8b7d95; font-size: .75rem; }
+    .sub-pick { flex: 0 0 auto; font-size: .8rem; font-weight: 800; color: #642a72; }
     .mae-actions { display: flex; gap: 8px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #efeaf1; }
     .mae-actions .ali-area-sel { flex: 1; }
     .cie-inicial { position: sticky; top: 54px; z-index: 3; font-size: .8rem; font-weight: 800; color: #642a72; background: #f3edf5; border-radius: 8px; padding: 4px 12px; margin: 8px 0 2px; }
@@ -876,10 +890,21 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260713n"></script>
-  <script src="js/metrology.js?v=20260713n"></script>
-  <script src="js/scanner.js?v=20260713n"></script>
-  <script src="js/outbox-service.js?v=20260713n"></script>
-  <script src="js/app.js?v=20260713n"></script>
+  <script src="js/api-client.js?v=20260713o"></script>
+  <script src="js/metrology.js?v=20260713o"></script>
+  <div id="sub-drawer" class="sub-drawer hidden">
+    <div class="sub-sheet">
+      <div class="sub-sheet-head">
+        <b>Sustituir producto</b>
+        <button id="sub-close" class="btn-ghost" style="margin:0;">✕</button>
+      </div>
+      <div id="sub-actual" class="sub-actual"></div>
+      <input id="sub-q" class="cie-buscar" type="search" placeholder="Buscar producto sustituto…" />
+      <div id="sub-res" class="sub-res"></div>
+    </div>
+  </div>
+  <script src="js/scanner.js?v=20260713o"></script>
+  <script src="js/outbox-service.js?v=20260713o"></script>
+  <script src="js/app.js?v=20260713o"></script>
 </body>
 </html>
