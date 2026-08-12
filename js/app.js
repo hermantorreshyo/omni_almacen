@@ -1446,6 +1446,10 @@ const App = (() => {
   function creationDate(t) {
     return t.created_at || t.fecha_creacion || t.createdAt || transferDate(t) || '';
   }
+  /* Clave de la ventana de corte vigente ahora mismo (para distinguir las futuras). */
+  function ventanaActualKey() {
+    return cutoffWindow(new Date().toISOString()).key;
+  }
 
   // Picking: solo solicitudes cuyo ORIGEN es mi interlocutor. Incluye SOLICITADO
   // (nuevas) y EN_PICKING (asignadas a mí, reabribles hasta cambiar de estado).
@@ -1488,27 +1492,52 @@ const App = (() => {
       const key = `${dest}|${win.key}`;
       (groups[key] = groups[key] || { dest, win, traspasos: [] }).traspasos.push(t);
     });
-    const orden = Object.values(groups).sort((a, b) => String(b.win.key).localeCompare(String(a.win.key)));
+    const winActualSort = ventanaActualKey();
+    const orden = Object.values(groups).sort((a, b) => {
+      const af = String(a.win.key) > String(winActualSort), bf = String(b.win.key) > String(winActualSort);
+      if (af !== bf) return af ? 1 : -1;              // futuras al final
+      return String(b.win.key).localeCompare(String(a.win.key));   // dentro de cada bloque, más reciente primero
+    });
     list.innerHTML = '';
+    const winActual = ventanaActualKey();
+    let bandaFuturaPuesta = false, bandaActualPuesta = false;
     orden.forEach((g) => {
+      const esFutura = String(g.win.key) > String(winActual);   // ventana que aún no toca alistar
+      // Banda separadora al pasar de "por gestionar" a "próximas ventanas".
+      if (esFutura && !bandaFuturaPuesta) {
+        bandaFuturaPuesta = true;
+        const b = document.createElement('div'); b.className = 'pick-band pick-band-futura';
+        b.textContent = 'Próximas ventanas — aún no gestionar';
+        list.appendChild(b);
+      } else if (!esFutura && !bandaActualPuesta) {
+        bandaActualPuesta = true;
+        const b = document.createElement('div'); b.className = 'pick-band';
+        b.textContent = 'Para gestionar ahora';
+        list.appendChild(b);
+      }
       const varios = g.traspasos.length > 1;
       const sts = g.traspasos.map((t) => String(tState(t)).toUpperCase());
       const todosListos = sts.length && sts.every((s) => s === 'LISTO_DESPACHO');
       const algunoEnPicking = sts.includes('EN_PICKING');
-      const c = document.createElement('button'); c.className = 'rowcard';
-      const badge = todosListos
-        ? '<span class="chip chip-ok">LISTO · esperando ruta</span>'
-        : algunoEnPicking
-          ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
-          : sts.includes('LISTO_DESPACHO')
-            ? '<span class="chip chip-amb">PARCIAL</span>'
-            : '<span class="chip">SOLICITADO</span>';
+      const c = document.createElement('button'); c.className = 'rowcard' + (esFutura ? ' rowcard-futura' : '');
+      const badge = esFutura
+        ? '<span class="chip chip-futura">Próxima ventana</span>'
+        : todosListos
+          ? '<span class="chip chip-ok">LISTO · esperando ruta</span>'
+          : algunoEnPicking
+            ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
+            : sts.includes('LISTO_DESPACHO')
+              ? '<span class="chip chip-amb">PARCIAL</span>'
+              : '<span class="chip">SOLICITADO</span>';
       const nombre = g.traspasos[0].dest_sede || intNameById(g.dest);
       const sub = varios
         ? `${g.traspasos.length} pedidos · ${g.win.label}`
         : `Traspaso #${tId(g.traspasos[0])} · ${g.win.label}`;
       c.innerHTML = `<div><b>${nombre}</b><small>${sub}</small></div>${badge}`;
-      c.addEventListener('click', () => openAlistarGroup(g).catch(() => {}));
+      c.addEventListener('click', () => {
+        if (esFutura && !confirm(`Este pedido pertenece a la ${g.win.label}, que aún no toca gestionar.\n\n¿Seguro que quieres abrirlo de todas formas?`)) return;
+        openAlistarGroup(g).catch(() => {});
+      });
       list.appendChild(c);
     });
   }
