@@ -2387,7 +2387,7 @@ const App = (() => {
      PANEL DE TRASPASOS · KPIs e histórico (perimetral por interlocutor)
      Informe histórico: muestra info sin importar el estado del SKU.
   ════════════════════════════════════════════════════════════════ */
-  const DASH_STATES = ['SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO', 'EN_RUTA', 'PENDIENTE_RECEPCION', 'CERRADO'];
+  const DASH_STATES = ['BORRADOR', 'SOLICITADO', 'EN_PICKING', 'LISTO_DESPACHO', 'EN_RUTA', 'PENDIENTE_RECEPCION', 'CERRADO', 'CANCELADO'];
   async function openDashboard() {
     view('view-dashboard');
     el('dash-kpis').innerHTML = `<div class="skel"></div><div class="skel"></div>`;
@@ -2449,6 +2449,29 @@ const App = (() => {
     });
     renderDashboard(filtered);
   }
+  /* Cancela un pedido propio en BORRADOR/SOLICITADO → CANCELADO (no se borra, queda en histórico). */
+  async function cancelarPedido(t) {
+    const st = String(tState(t)).toUpperCase();
+    if (st !== 'BORRADOR' && st !== 'SOLICITADO') { toast('Solo se puede cancelar antes de iniciar el picking.', 'warn'); return; }
+    let motivo = prompt(`Cancelar el pedido #${tId(t)}.\nEl pedido quedará como CANCELADO (no se elimina, queda en el histórico).\n\nMotivo (opcional):`, '');
+    if (motivo === null) return;   // cancelado por el usuario
+    try {
+      await ApiClient.cancelarPedido({ traspaso_id: tId(t), reason: motivo.trim() });
+      toast(`Pedido #${tId(t)} cancelado.`, 'ok');
+      openDashboard();
+    } catch (e) {
+      logError('dashboard/cancelar', e);
+      if (e && (e.code === 'ERR_NOT_FOUND' || e.status === 404)) {
+        toast('La cancelación de pedidos aún no está disponible en el API CORE.', 'warn');
+      } else if (e && e.status === 403) {
+        toast('Solo la tienda dueña del pedido puede cancelarlo.', 'warn');
+      } else if (e && e.code === 'ERR_STATE') {
+        toast('Este pedido ya inició su proceso y no se puede cancelar.', 'warn');
+      } else {
+        toast(e.message || 'No se pudo cancelar el pedido.', 'err');
+      }
+    }
+  }
   function renderDashboard(rows) {
     const total   = rows.length;
     const byState = Object.fromEntries(DASH_STATES.map((s) => [s, 0]));
@@ -2485,12 +2508,18 @@ const App = (() => {
       const origen = intNameById(originIntOf(t));
       const fecha = transferDate(t) ? fmtDT(transferDate(t)) : '';
       const c = document.createElement('div'); c.className = 'rowcard rowcard-exp';
+      const st = String(tState(t)).toUpperCase();
+      const propio = originIntOf(t) != null && Number(originIntOf(t)) === Number(state.interlocutor);
+      const cancelable = propio && (st === 'BORRADOR' || st === 'SOLICITADO');
       c.innerHTML = `<div class="td-head">
           <b>${solicitante} · #${tId(t)}</b>
           <small class="td-route">${origen} → ${solicitante}${fecha ? ' · ' + fecha : ''}</small>
           <small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small>
         </div>
-        <span class="chip">${tState(t).replace(/_/g, ' ')}</span>`;
+        <div class="td-actions">
+          <span class="chip">${tState(t).replace(/_/g, ' ')}</span>
+          ${cancelable ? `<button class="td-cancel" title="Cancelar pedido" aria-label="Cancelar pedido">🗑</button>` : ''}
+        </div>`;
       const det = document.createElement('div'); det.className = 'dash-det dash-det-box hidden';
       c.addEventListener('click', async () => {
         det.classList.toggle('hidden');
@@ -2518,6 +2547,10 @@ const App = (() => {
           });
         }
       });
+      if (cancelable) {
+        const btn = c.querySelector('.td-cancel');
+        btn.addEventListener('click', (ev) => { ev.stopPropagation(); cancelarPedido(t); });
+      }
       list.appendChild(c); list.appendChild(det);
     });
   }

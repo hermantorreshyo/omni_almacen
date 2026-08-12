@@ -127,6 +127,7 @@ const ApiClient = (() => {
     clasificarSku:      (payload) => _request('sku_area', { method: 'POST', body: payload }),
     cambiarEstadoAdmin: (payload) => _request('transfer_admin_state', { method: 'POST', body: payload }),
     sysConfig:          (key)     => _request('sys_config', { query: { key } }),
+    cancelarPedido:     (payload) => _request('transfer_cancel', { method: 'POST', body: payload }),
     pickingAlistar:     (payload) => _request('picking_alistar',     { method: 'POST', body: payload }),
     rutasActivas:       (status, extra = {}) => _request('rutas_activas', { query: { ...(status ? { status } : {}), ...extra } }),
     miRutaHoy:          ()        => _request('mis_rutas'),

@@ -87,7 +87,8 @@ $UP = [
     'transfer_draft_del'   => '/inventory/transfers/%d',              // DELETE descartar borrador                 // POST crear / GET ?state=
     'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
     'transfer_admin_state' => '/inventory/transfers/%d/admin-state',  // PUT cambio de estado admin
-    'sys_config'           => '/config',                              // GET config del sistema (pendiente 1001) (pendiente 1001)
+    'sys_config'           => '/config',                              // GET config del sistema (pendiente 1001)
+    'transfer_cancel'      => '/inventory/transfers/%d/cancel',        // PUT cancelar (dueño, BORRADOR/SOLICITADO) — pendiente 1001 (pendiente 1001)
     'transfer_picking'     => '/inventory/transfers/%d/picking',      // PUT
     'transfer_picking_items' => '/inventory/transfers/%d/picking-items', // PATCH (EN_PICKING, no cambia estado)
     'transfer_dispatch'    => '/inventory/transfers/%d/dispatch',     // PUT
@@ -359,6 +360,16 @@ switch ($action) {
         relay(client()->request('PUT', sprintf($UP['sku_area'], $id), json_encode($body, JSON_UNESCAPED_UNICODE), true));
     }
 
+    case 'transfer_cancel': {      // PUT /inventory/transfers/{id}/cancel (dueño; BORRADOR/SOLICITADO)
+        requireAuth();
+        $in = bodyJson();
+        $id = (int) ($in['traspaso_id'] ?? 0);
+        if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
+        $body = [];
+        if (!empty($in['reason'])) $body['reason'] = (string) $in['reason'];
+        relay(client()->request('PUT', sprintf($UP['transfer_cancel'], $id),
+            json_encode($body, JSON_UNESCAPED_UNICODE), true));
+    }
     case 'sys_config': {           // GET /config?key= — parámetro del sistema (pendiente 1001)
         requireAuth();
         $qs = [];
