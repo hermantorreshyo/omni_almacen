@@ -1412,7 +1412,7 @@ const App = (() => {
      siguiente (hora de Madrid). La hora de corte es configurable en el core (pendiente);
      por defecto 12:00. Un pedido creado a las 15:00 del 10-ago pertenece a la ventana
      10-ago 12:00 → 11-ago 12:00, que se alista el 11-ago al corte. */
-  const CUTOFF_HOUR = 12;   // por defecto; se sobrescribirá con la config del core cuando exista
+  const CUTOFF_HOUR = 15;   // por defecto; se sobrescribirá con la config del core cuando exista
   function cutoffHour() { return Number(state._cutoffHour ?? CUTOFF_HOUR); }
   /* Fecha del pedido en hora de Madrid (partes año/mes/día/hora). */
   function madridParts(s) {
