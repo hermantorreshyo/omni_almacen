@@ -276,9 +276,11 @@
     .ali-filtro { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
     .ali-fbtn { flex: 0 0 auto; padding: 7px 12px; border: 1px solid #d9d5df; border-radius: 999px; background: #fff; font-size: .82rem; font-weight: 700; color: #6b7280; cursor: pointer; white-space: nowrap; }
     .ali-fbtn-on { background: #642a72; border-color: #642a72; color: #fff; }
-    .pick-band { font-size: .74rem; font-weight: 800; color: #642a72; text-transform: uppercase; letter-spacing: .04em; margin: 14px 2px 6px; }
+    .pick-band { display: flex; align-items: center; gap: 7px; font-size: .74rem; font-weight: 800; color: var(--win, #642a72); text-transform: uppercase; letter-spacing: .03em; margin: 16px 2px 6px; }
+    .pick-band-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--win, #642a72); flex: 0 0 auto; }
     .pick-band-futura { color: #9a7b0a; }
-    .rowcard-futura { opacity: .62; background: repeating-linear-gradient(135deg, #fbfaf7, #fbfaf7 8px, #f5f1e8 8px, #f5f1e8 16px); border: 1px dashed #d9c88f; }
+    .rowcard-win { border-left: 4px solid var(--win, #642a72); }
+    .rowcard-futura { opacity: .6; background: repeating-linear-gradient(135deg, #fbfaf7, #fbfaf7 8px, #f5f1e8 8px, #f5f1e8 16px); border: 1px dashed #d9c88f; border-left: 4px solid #9a7b0a; }
     .rowcard-futura:active { opacity: .8; }
     .chip-futura { background: #fdf3d4; color: #8a6d08; border: 1px solid #ecd98f; }
     .dash-filtros { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -871,10 +873,10 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260713k"></script>
-  <script src="js/metrology.js?v=20260713k"></script>
-  <script src="js/scanner.js?v=20260713k"></script>
-  <script src="js/outbox-service.js?v=20260713k"></script>
-  <script src="js/app.js?v=20260713k"></script>
+  <script src="js/api-client.js?v=20260713l"></script>
+  <script src="js/metrology.js?v=20260713l"></script>
+  <script src="js/scanner.js?v=20260713l"></script>
+  <script src="js/outbox-service.js?v=20260713l"></script>
+  <script src="js/app.js?v=20260713l"></script>
 </body>
 </html>

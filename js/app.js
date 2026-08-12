@@ -1492,34 +1492,38 @@ const App = (() => {
       const key = `${dest}|${win.key}`;
       (groups[key] = groups[key] || { dest, win, traspasos: [] }).traspasos.push(t);
     });
-    const winActualSort = ventanaActualKey();
+    const winActual = ventanaActualKey();
     const orden = Object.values(groups).sort((a, b) => {
-      const af = String(a.win.key) > String(winActualSort), bf = String(b.win.key) > String(winActualSort);
+      const af = String(a.win.key) > String(winActual), bf = String(b.win.key) > String(winActual);
       if (af !== bf) return af ? 1 : -1;              // futuras al final
       return String(b.win.key).localeCompare(String(a.win.key));   // dentro de cada bloque, más reciente primero
     });
     list.innerHTML = '';
-    const winActual = ventanaActualKey();
-    let bandaFuturaPuesta = false, bandaActualPuesta = false;
+    // Un color distinto por cada ventana de corte (se asigna en orden de aparición).
+    const WIN_COLORS = ['#2563eb', '#0a7d54', '#b45309', '#7c3aed', '#be185d', '#0e7490'];
+    const winColorMap = {};
+    let colorIdx = -1;
+    let lastWinKey = null;
     orden.forEach((g) => {
       const esFutura = String(g.win.key) > String(winActual);   // ventana que aún no toca alistar
-      // Banda separadora al pasar de "por gestionar" a "próximas ventanas".
-      if (esFutura && !bandaFuturaPuesta) {
-        bandaFuturaPuesta = true;
-        const b = document.createElement('div'); b.className = 'pick-band pick-band-futura';
-        b.textContent = 'Próximas ventanas — aún no gestionar';
-        list.appendChild(b);
-      } else if (!esFutura && !bandaActualPuesta) {
-        bandaActualPuesta = true;
-        const b = document.createElement('div'); b.className = 'pick-band';
-        b.textContent = 'Para gestionar ahora';
+      // Color estable por ventana.
+      if (!(g.win.key in winColorMap)) { colorIdx++; winColorMap[g.win.key] = esFutura ? '#9a7b0a' : WIN_COLORS[colorIdx % WIN_COLORS.length]; }
+      const color = winColorMap[g.win.key];
+      // Banda separadora CADA VEZ que cambia la ventana de corte.
+      if (g.win.key !== lastWinKey) {
+        lastWinKey = g.win.key;
+        const b = document.createElement('div');
+        b.className = 'pick-band' + (esFutura ? ' pick-band-futura' : '');
+        b.style.setProperty('--win', color);
+        b.innerHTML = `<span class="pick-band-dot"></span>${g.win.label}${esFutura ? ' · aún no gestionar' : ''}`;
         list.appendChild(b);
       }
       const varios = g.traspasos.length > 1;
       const sts = g.traspasos.map((t) => String(tState(t)).toUpperCase());
       const todosListos = sts.length && sts.every((s) => s === 'LISTO_DESPACHO');
       const algunoEnPicking = sts.includes('EN_PICKING');
-      const c = document.createElement('button'); c.className = 'rowcard' + (esFutura ? ' rowcard-futura' : '');
+      const c = document.createElement('button'); c.className = 'rowcard rowcard-win' + (esFutura ? ' rowcard-futura' : '');
+      c.style.setProperty('--win', color);
       const badge = esFutura
         ? '<span class="chip chip-futura">Próxima ventana</span>'
         : todosListos
