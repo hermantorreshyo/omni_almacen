@@ -3,7 +3,7 @@
 **Subsistema solicitante:** [1003] Gestión de Almacenes y Mermas
 **Endpoint solicitado:** nuevo, `PUT /inventory/transfers/{id}/cancel` (o equivalente)
 **Prioridad:** Media-Alta
-**Estado:** PENDIENTE en [1001]. [1003] deja la UI lista para enchufar.
+**Estado:** ✅ ATENDIDA (v6.31) — PUT /inventory/transfers/{id}/cancel implementado. Permiso inventory.write (dueño, no admin); propiedad validada por el token contra interlocutor_id_dest; solo BORRADOR/SOLICITADO (409 en otro estado); pasa a CANCELADO sin borrar ni tocar inventario; auditoría en transfer_log. reason opcional (recomendado). [1003] ya lo consume.
 
 ---
 
