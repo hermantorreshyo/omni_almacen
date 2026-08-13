@@ -1412,7 +1412,7 @@ const App = (() => {
      siguiente (hora de Madrid). La hora de corte es configurable en el core (pendiente);
      por defecto 12:00. Un pedido creado a las 15:00 del 10-ago pertenece a la ventana
      10-ago 12:00 → 11-ago 12:00, que se alista el 11-ago al corte. */
-  const CUTOFF_HOUR = 13;   // por defecto; se sobrescribirá con la config del core cuando exista
+  const CUTOFF_HOUR = 12;   // por defecto; se sobrescribirá con la config del core cuando exista
   function cutoffHour() { return Number(state._cutoffHour ?? CUTOFF_HOUR); }
   /* Fecha del pedido en hora de Madrid (partes año/mes/día/hora). */
   function madridParts(s) {
@@ -2529,6 +2529,15 @@ const App = (() => {
       }
     }
   }
+  /* Color asociado a cada estado del traspaso (chip y borde en el panel). */
+  function estadoColor(st) {
+    const M = {
+      BORRADOR: '#9ca3af', SOLICITADO: '#642a72', EN_PICKING: '#b45309',
+      LISTO_DESPACHO: '#0a7d54', EN_RUTA: '#2563eb', PENDIENTE_RECEPCION: '#0e7490',
+      CERRADO: '#4b5563', CANCELADO: '#c0392b',
+    };
+    return M[String(st).toUpperCase()] || '#642a72';
+  }
   function renderDashboard(rows) {
     const total   = rows.length;
     const byState = Object.fromEntries(DASH_STATES.map((s) => [s, 0]));
@@ -2568,13 +2577,15 @@ const App = (() => {
       const st = String(tState(t)).toUpperCase();
       const propio = originIntOf(t) != null && Number(originIntOf(t)) === Number(state.interlocutor);
       const cancelable = propio && (st === 'BORRADOR' || st === 'SOLICITADO');
+      const stColor = estadoColor(st);
+      c.style.setProperty('--st', stColor);
       c.innerHTML = `<div class="td-head">
           <b>${solicitante} · #${tId(t)}</b>
           <small class="td-route">${origen} → ${solicitante}${fecha ? ' · ' + fecha : ''}</small>
-          <small>${n != null ? n + ' ítem(s)' : 'ver detalle'}${t.notes ? ' · ' + t.notes : ''}</small>
+          <small>${n != null ? n + ' ítem(s)' : 'ver detalle'}</small>
         </div>
         <div class="td-actions">
-          <span class="chip">${tState(t).replace(/_/g, ' ')}</span>
+          <span class="chip td-chip-st" style="--st:${stColor}">${tState(t).replace(/_/g, ' ')}</span>
           ${cancelable ? `<button class="td-cancel" title="Cancelar pedido" aria-label="Cancelar pedido">🗑</button>` : ''}
         </div>`;
       const det = document.createElement('div'); det.className = 'dash-det dash-det-box hidden';
@@ -2588,18 +2599,29 @@ const App = (() => {
             ? '<div class="dd-head"><span>Producto</span><span class="dd-qcol">Pedida</span><span class="dd-qcol">Despachada</span></div>'
             : '<div class="td-empty">Sin ítems.</div>';
           items.forEach((it) => {
-            const row = document.createElement('div'); row.className = 'dd-item';
-            const meta = [it.sku_final_code, it.category_name].filter(Boolean).join(' · ');
-            const ped = fmtQty(it.quantity_requested ?? it.quantity ?? 0);
-            const desp = it.quantity_dispatched != null ? fmtQty(it.quantity_dispatched) : '—';
+            const ped = Number(it.quantity_requested ?? it.quantity ?? 0);
+            const tieneDesp = it.quantity_dispatched != null;
+            const desp = tieneDesp ? Number(it.quantity_dispatched) : null;
             const u = it.unit_of_measure || it.unit || 'ud';
+            const meta = [it.sku_final_code, it.category_name].filter(Boolean).join(' · ');
+            // Novedad: se despachó menos de lo pedido, o no se despachó nada.
+            const nula = tieneDesp && desp <= 0;
+            const parcial = tieneDesp && desp > 0 && desp < ped;
+            const clase = nula ? ' dd-item-nula' : (parcial ? ' dd-item-parcial' : '');
+            const obs = (it.picking_notes || it.notes || '').trim();
+            const row = document.createElement('div'); row.className = 'dd-item' + clase;
+            const despTxt = tieneDesp ? `${fmtQty(desp)} <span>${u}</span>` : '—';
             row.innerHTML = `
-              <div class="dd-item-main">
-                ${meta ? `<div class="dd-item-meta">${meta}</div>` : ''}
-                <div class="dd-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
+              <div class="dd-item-row">
+                <div class="dd-item-main">
+                  ${meta ? `<div class="dd-item-meta">${meta}</div>` : ''}
+                  <div class="dd-item-name">${it.item_name || it.name || ('SKU ' + (it.item_id ?? ''))}</div>
+                </div>
+                <div class="dd-qcol dd-ped">${fmtQty(ped)} <span>${u}</span></div>
+                <div class="dd-qcol dd-desp ${nula ? 'dd-desp-nula' : parcial ? 'dd-desp-parcial' : ''}">${despTxt}</div>
               </div>
-              <div class="dd-qcol dd-ped">${ped} <span>${u}</span></div>
-              <div class="dd-qcol dd-desp">${desp}${desp !== '—' ? ` <span>${u}</span>` : ''}</div>`;
+              ${nula || parcial ? `<div class="dd-flag">${nula ? 'No despachado' : `Despachado ${fmtQty(ped - desp)} ${u} menos de lo pedido`}</div>` : ''}
+              ${obs ? `<div class="dd-obs">📝 ${obs}</div>` : ''}`;
             det.appendChild(row);
           });
         }

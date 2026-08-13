@@ -299,6 +299,17 @@
     .dd-ped { font-weight: 700; color: #1f2430; }
     .dd-desp { font-weight: 800; color: #0a7d54; }
     .dd-qcol span { font-size: .68rem; font-weight: 600; color: #9ca3af; }
+    .td-chip-st { background: #f4f1f6; color: var(--st); border: 1px solid var(--st); font-weight: 800; }
+    .rowcard-exp { border-left: 4px solid var(--st, #642a72); }
+    .dd-item-row { display: flex; align-items: center; }
+    .dd-item-nula { background: #fdf1f1; border-radius: 8px; margin: 2px -4px; padding: 6px 4px; border-bottom: 0; }
+    .dd-item-parcial { background: #fff7ed; border-radius: 8px; margin: 2px -4px; padding: 6px 4px; border-bottom: 0; }
+    .dd-desp-nula { color: #c0392b !important; }
+    .dd-desp-parcial { color: #b45309 !important; }
+    .dd-flag { font-size: .74rem; font-weight: 700; margin-top: 3px; }
+    .dd-item-nula .dd-flag { color: #c0392b; }
+    .dd-item-parcial .dd-flag { color: #b45309; }
+    .dd-obs { font-size: .78rem; color: #6b5a73; margin-top: 3px; background: #f3eef6; border-radius: 7px; padding: 4px 8px; }
     .td-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
     .td-cancel { border: 1px solid #f0c9c9; background: #fdf1f1; color: #c0392b; border-radius: 8px; padding: 5px 9px; font-size: .95rem; line-height: 1; cursor: pointer; }
     .td-cancel:active { background: #f8dcdc; }
@@ -890,8 +901,8 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260713o"></script>
-  <script src="js/metrology.js?v=20260713o"></script>
+  <script src="js/api-client.js?v=20260713p"></script>
+  <script src="js/metrology.js?v=20260713p"></script>
   <div id="sub-drawer" class="sub-drawer hidden">
     <div class="sub-sheet">
       <div class="sub-sheet-head">
@@ -903,8 +914,8 @@
       <div id="sub-res" class="sub-res"></div>
     </div>
   </div>
-  <script src="js/scanner.js?v=20260713o"></script>
-  <script src="js/outbox-service.js?v=20260713o"></script>
-  <script src="js/app.js?v=20260713o"></script>
+  <script src="js/scanner.js?v=20260713p"></script>
+  <script src="js/outbox-service.js?v=20260713p"></script>
+  <script src="js/app.js?v=20260713p"></script>
 </body>
 </html>
