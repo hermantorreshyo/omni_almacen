@@ -989,22 +989,23 @@ const App = (() => {
       }
     } catch (e) { logError('draft/recover', e); }
   }
-  /* Carga fábricas (origen), ordenadas por id ascendente; la primera por defecto. */
+  /* Carga obradores (origen de solicitud), ordenados por id asc; el primero por defecto.
+     v6.42: solo fábricas marcadas como obrador (is_obrador=1); incluye fábricas secundarias. */
   async function loadFabricas() {
     try {
-      const fr = await ApiClient.catalog('interlocutors', { type: 'fabrica' });
+      const fr = await ApiClient.catalog('interlocutors', { type: 'fabrica,fabrica_secundaria', is_obrador: 1 });
       const fabricas = rowsOf(fr.data).slice().sort((a, b) => Number(a.id) - Number(b.id));
       state.ctx.fabricas = fabricas;
       const sel = el('sol-origen'); sel.innerHTML = '';
+      if (!fabricas.length) { fillSelect(sel, [], intName, 'No hay obradores disponibles'); return; }
       fabricas.forEach((f, i) => {
         const o = document.createElement('option');
         o.value = String(f.id); o.textContent = intName(f);
-        if (i === 0) o.selected = true;                 // primera por defecto
+        if (i === 0) o.selected = true;                 // primero por defecto
         sel.appendChild(o);
       });
-      if (!fabricas.length) fillSelect(sel, [], intName, 'Sin fábricas');
       sel.onchange = async () => { await resolveSolEndpoints(); await loadSolStock(); renderSolCards(); };
-    } catch (e) { logError('sol/fabricas', e); fillSelect(el('sol-origen'), [], intName, 'Sin fábricas'); }
+    } catch (e) { logError('sol/fabricas', e); fillSelect(el('sol-origen'), [], intName, 'No hay obradores disponibles'); }
   }
   async function locForInterlocutor(intId) {
     if (!intId) return null;
