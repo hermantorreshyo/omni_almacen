@@ -990,10 +990,11 @@ const App = (() => {
     } catch (e) { logError('draft/recover', e); }
   }
   /* Carga obradores (origen de solicitud), ordenados por id asc; el primero por defecto.
-     v6.42: solo fábricas marcadas como obrador (is_obrador=1); incluye fábricas secundarias. */
+     La ÚNICA condición es is_obrador=1 (cualquier interlocutor puede ser obrador,
+     independiente de su type). */
   async function loadFabricas() {
     try {
-      const fr = await ApiClient.catalog('interlocutors', { type: 'fabrica,fabrica_secundaria', is_obrador: 1 });
+      const fr = await ApiClient.catalog('interlocutors', { is_obrador: 1 });
       const fabricas = rowsOf(fr.data).slice().sort((a, b) => Number(a.id) - Number(b.id));
       state.ctx.fabricas = fabricas;
       const sel = el('sol-origen'); sel.innerHTML = '';
