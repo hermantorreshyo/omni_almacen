@@ -511,9 +511,15 @@ switch ($action) {
     }
     case 'picking_iniciar': {
         requireAuth();
-        $id = (int) (bodyJson()['traspaso_id'] ?? 0);
+        $in = bodyJson();
+        $id = (int) ($in['traspaso_id'] ?? 0);
         if ($id <= 0) fail('ERR_PARAM', 'traspaso_id inválido.', 422);
-        relay(client()->request('PUT', sprintf($UP['transfer_picking'], $id), '{"items":[]}', true));
+        // v6.40: PUT /picking con los ítems del primer guardado guarda Y transiciona a
+        // EN_PICKING. Si viene sin ítems (items:[]), el core responde started:false y no
+        // cambia el estado (abrir para consultar no debe iniciar el picking).
+        $body = ['items' => $in['items'] ?? []];
+        relay(client()->request('PUT', sprintf($UP['transfer_picking'], $id),
+            json_encode($body, JSON_UNESCAPED_UNICODE), true));
     }
     case 'picking_guardar': {
         requireAuth();

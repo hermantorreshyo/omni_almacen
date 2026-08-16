@@ -1529,10 +1529,10 @@ const App = (() => {
         : todosListos
           ? '<span class="chip chip-ok">LISTO · esperando ruta</span>'
           : algunoEnPicking
-            ? '<span class="chip chip-amb">EN PREPARACIÓN</span>'
+            ? '<span class="chip chip-amb">En preparación</span>'
             : sts.includes('LISTO_DESPACHO')
               ? '<span class="chip chip-amb">PARCIAL</span>'
-              : '<span class="chip">SOLICITADO</span>';
+              : '<span class="chip">Nuevas</span>';
       const nombre = g.traspasos[0].dest_sede || intNameById(g.dest);
       const sub = varios
         ? `${g.traspasos.length} pedidos · ${g.win.label}`
@@ -1547,15 +1547,8 @@ const App = (() => {
   }
   /* Abre el picking consolidado de un grupo (varios traspasos de la misma tienda+fecha). */
   async function openAlistarGroup(g) {
-    // Inicia (SOLICITADO→EN_PICKING) solo los que están en SOLICITADO. Los EN_PICKING y
-    // los LISTO_DESPACHO (ya despachados, aún no cargados a ruta) se abren para ajustar.
-    for (const t of g.traspasos) {
-      const st = String(tState(t)).toUpperCase();
-      if (st === 'SOLICITADO') {
-        try { await ApiClient.pickingIniciar({ traspaso_id: tId(t) }); }
-        catch (e) { if (e && e.code !== 'ERR_STATE') logError('picking/iniciar', e); }
-      }
-    }
+    // v6.40: abrir la pantalla es SOLO consulta (GET) — no cambia el estado. El traspaso
+    // pasa a EN_PICKING recién cuando el operario marca el PRIMER ítem (ver savePickingItems).
     try {
       let header = g.traspasos[0], allItems = [];
       for (const t of g.traspasos) {
@@ -1986,12 +1979,18 @@ const App = (() => {
   /* Guarda el avance del picking (PATCH /picking-items, no cambia de estado).
      Permite alistar en varias visitas: el picker sale y vuelve sin perder lo hecho. */
   async function savePickingItems() {
-    // Solo se guardan los ítems confirmados o no despachados, agrupados por traspaso.
-    // v6.30: PATCH /picking-items acepta EN_PICKING y LISTO_DESPACHO; el core mapea al
-    // campo correcto (quantity_picked o quantity_dispatched) según el estado. En EN_RUTA
-    // el core lo rechaza (correcto: ya cargado a ruta).
+    // Guardado incremental por traspaso (v6.40):
+    //  - Si el traspaso está en SOLICITADO → PUT /picking con los ítems: guarda Y transiciona
+    //    a EN_PICKING en el mismo paso (el estado cambia al marcar el PRIMER ítem, no al abrir).
+    //  - Si ya está en EN_PICKING/LISTO_DESPACHO → PATCH /picking-items (no cambia estado;
+    //    en LISTO_DESPACHO el core mapea a quantity_dispatched, v6.30).
+    // En EN_RUTA el core rechaza (correcto).
     const items = state.ctx.items.filter((it) => it.confirmed || it.nodespacho);
     if (!items.length) return { ok: true, data: null };
+    const estadoDe = {};
+    (state.ctx.grupo ? state.ctx.grupo.traspasos : [state.ctx.traspaso]).forEach((t) => {
+      estadoDe[tId(t)] = String(tState(t)).toUpperCase();
+    });
     const porTraspaso = {};
     items.forEach((it) => {
       const tid = it._tid ?? tId(state.ctx.traspaso);
@@ -2003,8 +2002,20 @@ const App = (() => {
       if (note) o.notes = note;
       (porTraspaso[tid] = porTraspaso[tid] || []).push(o);
     });
-    const results = await Promise.all(Object.entries(porTraspaso).map(([tid, its]) =>
-      ApiClient.pickingItems({ traspaso_id: Number(tid), items: its })));
+    const calls = Object.entries(porTraspaso).map(([tid, its]) => {
+      const st = estadoDe[tid];
+      if (st === 'SOLICITADO') {
+        // Primer guardado real: PUT /picking guarda los ítems y transiciona a EN_PICKING.
+        return ApiClient.pickingIniciar({ traspaso_id: Number(tid), items: its }).then((r) => {
+          // Reflejar la transición localmente para que el próximo guardado use PATCH.
+          const t = (state.ctx.grupo ? state.ctx.grupo.traspasos : [state.ctx.traspaso]).find((x) => tId(x) === Number(tid));
+          if (t) { if (t.state != null) t.state = 'EN_PICKING'; if (t.estado != null) t.estado = 'EN_PICKING'; }
+          return r;
+        });
+      }
+      return ApiClient.pickingItems({ traspaso_id: Number(tid), items: its });
+    });
+    const results = await Promise.all(calls);
     return results[0] || { ok: true, data: null };
   }
   async function guardarAvancePicking() {
