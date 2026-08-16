@@ -283,6 +283,13 @@
     .rowcard-futura { opacity: .6; background: repeating-linear-gradient(135deg, #fbfaf7, #fbfaf7 8px, #f5f1e8 8px, #f5f1e8 16px); border: 1px dashed #d9c88f; border-left: 4px solid #9a7b0a; }
     .rowcard-futura:active { opacity: .8; }
     .chip-futura { background: #fdf3d4; color: #8a6d08; border: 1px solid #ecd98f; }
+    .pick-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: -2px 0 14px; padding: 10px 12px; background: #faf8fb; border: 1px solid #eee; border-radius: 12px; }
+    .pk-leg { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: #4b5563; }
+    .pk-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; border: 1px solid rgba(0,0,0,.08); }
+    .pk-dot-nueva { background: #642a72; }
+    .pk-dot-prep { background: #e59912; }
+    .pk-dot-listo { background: #16a34a; }
+    .pk-dot-futura { background: #e9c94a; }
     .dash-filtros { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
     .dash-f { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 100px; }
     .dash-f span { font-size: .72rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .03em; }
@@ -695,7 +702,12 @@
     <section id="view-picking" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Solicitudes a tu almacén</h1>
-      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Nuevas (SOLICITADO) y en preparación (EN_PICKING).</p>
+      <div class="pick-legend">
+        <span class="pk-leg"><span class="pk-dot pk-dot-nueva"></span>Nuevas</span>
+        <span class="pk-leg"><span class="pk-dot pk-dot-prep"></span>En preparación</span>
+        <span class="pk-leg"><span class="pk-dot pk-dot-listo"></span>Listo · esperando ruta</span>
+        <span class="pk-leg"><span class="pk-dot pk-dot-futura"></span>Próxima ventana</span>
+      </div>
       <div id="picking-list"></div>
     </section>
 
@@ -901,8 +913,8 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260713q"></script>
-  <script src="js/metrology.js?v=20260713q"></script>
+  <script src="js/api-client.js?v=20260713r"></script>
+  <script src="js/metrology.js?v=20260713r"></script>
   <div id="sub-drawer" class="sub-drawer hidden">
     <div class="sub-sheet">
       <div class="sub-sheet-head">
@@ -914,8 +926,8 @@
       <div id="sub-res" class="sub-res"></div>
     </div>
   </div>
-  <script src="js/scanner.js?v=20260713q"></script>
-  <script src="js/outbox-service.js?v=20260713q"></script>
-  <script src="js/app.js?v=20260713q"></script>
+  <script src="js/scanner.js?v=20260713r"></script>
+  <script src="js/outbox-service.js?v=20260713r"></script>
+  <script src="js/app.js?v=20260713r"></script>
 </body>
 </html>
