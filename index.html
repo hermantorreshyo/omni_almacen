@@ -317,6 +317,17 @@
     .dd-item-nula .dd-flag { color: #c0392b; }
     .dd-item-parcial .dd-flag { color: #b45309; }
     .dd-obs { font-size: .78rem; color: #6b5a73; margin-top: 3px; background: #f3eef6; border-radius: 7px; padding: 4px 8px; }
+    .mp-tot-box { display: flex; gap: 10px; margin-bottom: 12px; }
+    .mp-tot-box > div { flex: 1; background: #f6f2f8; border: 1px solid #e2d9e8; border-radius: 12px; padding: 12px; text-align: center; }
+    .mp-tot-box b { display: block; font-size: 1.3rem; color: #642a72; }
+    .mp-tot-box span { font-size: .72rem; color: #8b7d95; }
+    .mp-item { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #eee; border-radius: 12px; margin-bottom: 8px; background: #fff; }
+    .mp-item-main { flex: 1; min-width: 0; }
+    .mp-item-meta { font-size: .72rem; color: #8b7d95; }
+    .mp-item-name { font-size: .95rem; font-weight: 700; color: #2b2233; }
+    .mp-item-extra { font-size: .76rem; color: #9a8ba3; margin-top: 2px; }
+    .mp-item-qty { flex: 0 0 auto; font-size: 1.05rem; font-weight: 800; color: #642a72; text-align: right; }
+    .mp-item-qty span { display: block; font-size: .66rem; font-weight: 600; color: #9ca3af; }
     .td-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
     .td-cancel { border: 1px solid #f0c9c9; background: #fdf1f1; color: #c0392b; border-radius: 8px; padding: 5px 9px; font-size: .95rem; line-height: 1; cursor: pointer; }
     .td-cancel:active { background: #f8dcdc; }
@@ -699,6 +710,20 @@
     </section>
 
     <!-- ── FLUJO 3B/C: PICKING ──────────────────────────────────── -->
+    <section id="view-misprod" class="view wrap hidden">
+      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
+      <h1 id="mp-title" class="sec-title">Mis Productos</h1>
+      <div id="mp-sub" class="ali-sub">—</div>
+      <div class="dash-filtros">
+        <label class="dash-f"><span>Desde</span><input type="date" id="mp-from" /></label>
+        <label class="dash-f"><span>Hasta</span><input type="date" id="mp-to" /></label>
+      </div>
+      <input id="mp-sku" class="cie-buscar" type="search" placeholder="Filtrar por producto (opcional)…" />
+      <div id="mp-sku-res" class="sub-res" style="margin:-6px 0 10px;"></div>
+      <div id="mp-tot" class="mp-tot"></div>
+      <div id="mp-list"></div>
+    </section>
+
     <section id="view-picking" class="view wrap hidden">
       <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
       <h1 class="sec-title">Solicitudes a tu almacén</h1>
@@ -913,8 +938,8 @@
   </footer>
 
   <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js?v=20260713t"></script>
-  <script src="js/metrology.js?v=20260713t"></script>
+  <script src="js/api-client.js?v=20260713u"></script>
+  <script src="js/metrology.js?v=20260713u"></script>
   <div id="sub-drawer" class="sub-drawer hidden">
     <div class="sub-sheet">
       <div class="sub-sheet-head">
@@ -926,8 +951,8 @@
       <div id="sub-res" class="sub-res"></div>
     </div>
   </div>
-  <script src="js/scanner.js?v=20260713t"></script>
-  <script src="js/outbox-service.js?v=20260713t"></script>
-  <script src="js/app.js?v=20260713t"></script>
+  <script src="js/scanner.js?v=20260713u"></script>
+  <script src="js/outbox-service.js?v=20260713u"></script>
+  <script src="js/app.js?v=20260713u"></script>
 </body>
 </html>

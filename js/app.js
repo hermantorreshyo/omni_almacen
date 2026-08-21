@@ -276,12 +276,13 @@ const App = (() => {
     entregas:   { t: 'Mis Rutas',                 d: 'Tiendas y productos de tus rutas', area: 'transporte', go: openEntregas },
     solicitar:  { t: 'Solicitar Insumos',        d: 'Pedido de traspaso a bodega',    area: 'tienda',     go: openSolicitar },
     recibir:    { t: 'Recepción de Traspaso',    d: 'Verificar y cerrar entrega',     area: 'tienda',     go: openRecibir },
+    mis_productos: { t: 'Mis Productos',         d: 'Recibidos o despachados por tu sede', area: 'tienda', go: openMisProductos },
     merma:      { t: 'Registrar Merma',          d: 'Baja con evidencia fotográfica', area: 'mermas',     go: openMerma },
     dashboard:  { t: 'Panel de Traspasos',       d: 'Estado, KPIs e histórico',       area: 'gestion',    go: openDashboard },
     gestor_permisos: { t: 'Gestor de Permisos',  d: 'Asignar pantallas a roles',      area: 'gestion',    go: openPermisos },
   };
   // Orden de aparición en el home (agrupado por área/rol).
-  const TILE_ORDER = ['recepcion', 'ubicar', 'picking', 'transporte', 'entregas', 'solicitar', 'recibir', 'merma', 'dashboard', 'gestor_permisos'];
+  const TILE_ORDER = ['recepcion', 'ubicar', 'picking', 'transporte', 'entregas', 'solicitar', 'recibir', 'mis_productos', 'merma', 'dashboard', 'gestor_permisos'];
   /* Detección robusta de SuperAdmin: por rol, por usuario o por id global (=1).
      Resiliente a JWT sin rol (login en sede sin rol asignado). */
   function isSuperAdmin() {
@@ -548,6 +549,80 @@ const App = (() => {
       } else {
         toast(e.message || 'No se pudo cambiar el estado.', 'err');
       }
+    }
+  }
+  /* ── Mis Productos (v6.46): reporte recibido/despachado según la sede logueada ── */
+  async function openMisProductos() {
+    view('view-misprod');
+    // Rango por defecto: últimos 30 días.
+    if (!el('mp-from').value) {
+      const hoy = new Date(); const desde = new Date(); desde.setDate(desde.getDate() - 30);
+      el('mp-to').value = hoy.toISOString().slice(0, 10);
+      el('mp-from').value = desde.toISOString().slice(0, 10);
+    }
+    state._mpSkuId = null;
+    if (!state._mpCableado) {
+      el('mp-from').addEventListener('change', cargarMisProductos);
+      el('mp-to').addEventListener('change', cargarMisProductos);
+      let t = null;
+      el('mp-sku').addEventListener('input', () => { clearTimeout(t); t = setTimeout(buscarMpSku, 350); });
+      state._mpCableado = true;
+    }
+    cargarMisProductos();
+  }
+  async function buscarMpSku() {
+    const q = el('mp-sku').value.trim();
+    const box = el('mp-sku-res');
+    if (q.length < 2) { box.innerHTML = ''; if (state._mpSkuId) { state._mpSkuId = null; cargarMisProductos(); } return; }
+    try {
+      const rows = await fetchAllSkus({ status: 'active', limit: 20, q });
+      box.innerHTML = '';
+      rows.slice(0, 8).forEach((sk) => {
+        const b = document.createElement('button'); b.className = 'sub-item';
+        b.innerHTML = `<div><b>${sk.name || sk.sku_name || ('SKU ' + sk.id)}</b><small>${sk.sku_final_code || ''}</small></div><span class="sub-pick">Filtrar</span>`;
+        b.addEventListener('click', () => {
+          state._mpSkuId = sk.id; el('mp-sku').value = sk.name || sk.sku_name || sk.sku_final_code || '';
+          box.innerHTML = ''; cargarMisProductos();
+        });
+        box.appendChild(b);
+      });
+    } catch (e) { logError('misprod/buscar-sku', e); box.innerHTML = ''; }
+  }
+  async function cargarMisProductos() {
+    const list = el('mp-list'); list.innerHTML = skeleton();
+    el('mp-tot').innerHTML = '';
+    const params = { date_from: el('mp-from').value, date_to: el('mp-to').value, limit: 100 };
+    if (state._mpSkuId) params.item_id = state._mpSkuId;
+    try {
+      const r = await ApiClient.misProductos(params);
+      const d = r.data || {};
+      const esDespacho = d.view === 'despachado';
+      el('mp-title').textContent = esDespacho ? 'Productos Despachados' : 'Productos Recibidos';
+      el('mp-sub').textContent = `${d.interlocutor_name || ''}${d.date_from ? ' · ' + fmtDate(d.date_from) + ' → ' + fmtDate(d.date_to) : ''}`;
+      const items = d.items || [];
+      const tot = d.totals || {};
+      el('mp-tot').innerHTML = items.length
+        ? `<div class="mp-tot-box"><div><b>${fmtQty(tot.quantity_total ?? 0)}</b><span>${esDespacho ? 'despachado total' : 'recibido total'}</span></div><div><b>${tot.items_distinct_count ?? items.length}</b><span>productos distintos</span></div></div>`
+        : '';
+      if (!items.length) { list.innerHTML = empty(esDespacho ? 'Sin despachos en el rango.' : 'Sin recepciones en el rango.'); return; }
+      list.innerHTML = '';
+      items.forEach((it) => {
+        const row = document.createElement('div'); row.className = 'mp-item';
+        const extra = esDespacho
+          ? `${it.transfer_count ?? 0} envío(s)${it.destinations_count != null ? ' · ' + it.destinations_count + ' tienda(s)' : ''}`
+          : `${it.transfer_count ?? 0} recepción(es)`;
+        row.innerHTML = `
+          <div class="mp-item-main">
+            <div class="mp-item-meta">${it.sku_final_code || ''}</div>
+            <div class="mp-item-name">${it.item_name || ('SKU ' + (it.item_id ?? ''))}</div>
+            <div class="mp-item-extra">${extra}</div>
+          </div>
+          <div class="mp-item-qty">${fmtQty(it.quantity_total ?? 0)}<span>${it.unit_of_measure || 'ud'}</span></div>`;
+        list.appendChild(row);
+      });
+    } catch (e) {
+      logError('misprod/cargar', e);
+      list.innerHTML = apiErrorBox([e]);
     }
   }
   async function openRutaSelector() {

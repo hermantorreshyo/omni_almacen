@@ -127,6 +127,7 @@ const ApiClient = (() => {
     clasificarSku:      (payload) => _request('sku_area', { method: 'POST', body: payload }),
     cambiarEstadoAdmin: (payload) => _request('transfer_admin_state', { method: 'POST', body: payload }),
     sysConfig:          (key)     => _request('sys_config', { query: { key } }),
+    misProductos:       (params = {}) => _request('my_products', { query: params }),
     cancelarPedido:     (payload) => _request('transfer_cancel', { method: 'POST', body: payload }),
     sustituirProducto:  (payload) => _request('transfer_substitute', { method: 'POST', body: payload }),
     pickingAlistar:     (payload) => _request('picking_alistar',     { method: 'POST', body: payload }),

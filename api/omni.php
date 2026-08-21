@@ -87,6 +87,7 @@ $UP = [
     'transfer_solicitar'   => '/inventory/transfers/%d/solicitar',    // PUT enviar (BORRADOR→SOLICITADO)
     'transfer_draft_del'   => '/inventory/transfers/%d',              // DELETE descartar borrador                 // POST crear / GET ?state=
     'transfer_detail'      => '/inventory/transfers/%d',              // GET detalle con items
+    'my_products'          => '/inventory/reports/my-products',       // GET reporte recibido/despachado por sede (v6.46)
     'transfer_admin_state' => '/inventory/transfers/%d/admin-state',  // PUT cambio de estado admin
     'sys_config'           => '/config',                              // GET config del sistema (pendiente 1001)
     'transfer_cancel'      => '/inventory/transfers/%d/cancel',        // PUT cancelar (dueño, BORRADOR/SOLICITADO) → CANCELADO (v6.31)
@@ -382,6 +383,15 @@ switch ($action) {
         if (!empty($in['reason'])) $body['reason'] = (string) $in['reason'];
         relay(client()->request('PUT', sprintf($UP['transfer_substitute'], $id, $row),
             json_encode($body, JSON_UNESCAPED_UNICODE), true));
+    }
+    case 'my_products': {          // GET /inventory/reports/my-products (v6.46) — el core resuelve la sede por token
+        requireAuth();
+        $qs = [];
+        foreach (['date_from', 'date_to', 'item_id', 'interlocutor_id', 'page', 'limit'] as $k) {
+            if (isset($_GET[$k]) && $_GET[$k] !== '') $qs[$k] = $_GET[$k];
+        }
+        $url = $UP['my_products'] . ($qs ? ('?' . http_build_query($qs)) : '');
+        relay(client()->request('GET', $url, null, true));
     }
     case 'sys_config': {           // GET /config?key= — parámetro del sistema (pendiente 1001)
         requireAuth();
